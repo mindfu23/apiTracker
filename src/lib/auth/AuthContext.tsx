@@ -161,7 +161,8 @@ export function AuthProvider({ children, config: userConfig }: AuthProviderProps
         setShowAuthModal(false);
         return { success: true };
       } else {
-        return { success: false, error: data.error || 'Signup failed' };
+        console.error('Signup failed response:', data);
+        return { success: false, error: data.error || `Signup failed (${response.status})` };
       }
     } catch (error) {
       console.error('Signup error:', error);

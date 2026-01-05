@@ -23,15 +23,9 @@ export const handler = async (event, context) => {
   }
 
   // Parse path to determine action
-  // Assumes redirect rule: /api/auth/* -> /.netlify/functions/auth
-  // So path might be /api/auth/login or just /login depending on how it's invoked
-  let path = event.path.replace('/.netlify/functions/auth', '');
-  if (path.startsWith('/api/auth')) {
-    path = path.replace('/api/auth', '');
-  }
-  
-  // Ensure path starts with /
-  if (!path.startsWith('/')) path = '/' + path;
+  // Robustly get the last segment of the path to avoid prefix issues
+  const segments = event.path.split('/').filter(Boolean);
+  const action = segments.length > 0 ? segments[segments.length - 1] : '';
 
   let body = {};
   try {
@@ -51,10 +45,10 @@ export const handler = async (event, context) => {
   };
 
   try {
-    console.log(`[Auth] ${event.httpMethod} ${path}`);
+    console.log(`[Auth] ${event.httpMethod} ${event.path} -> Action: ${action}`);
 
     // POST /signup
-    if (path === '/signup' && event.httpMethod === 'POST') {
+    if (action === 'signup' && event.httpMethod === 'POST') {
       const { email, password, displayName } = body;
       if (!email || !password) {
         return { statusCode: 400, headers, body: JSON.stringify({ error: 'Email and password required' }) };
@@ -94,7 +88,7 @@ export const handler = async (event, context) => {
     }
 
     // POST /login
-    if (path === '/login' && event.httpMethod === 'POST') {
+    if (action === 'login' && event.httpMethod === 'POST') {
       const { email, password } = body;
       const user = users.find(u => u.email === email);
       
@@ -121,7 +115,7 @@ export const handler = async (event, context) => {
     }
 
     // POST /logout
-    if (path === '/logout' && event.httpMethod === 'POST') {
+    if (action === 'logout' && event.httpMethod === 'POST') {
       const cookies = cookie.parse(event.headers.cookie || '');
       if (cookies.session_id) sessions.delete(cookies.session_id);
       
@@ -139,7 +133,7 @@ export const handler = async (event, context) => {
     }
 
     // GET /me
-    if (path === '/me' && event.httpMethod === 'GET') {
+    if (action === 'me' && event.httpMethod === 'GET') {
       const session = getSession();
       if (!session) {
         return { statusCode: 401, headers, body: JSON.stringify({ error: 'Unauthorized' }) };
@@ -155,7 +149,7 @@ export const handler = async (event, context) => {
     }
 
     // POST /request-password-reset
-    if (path === '/request-password-reset' && event.httpMethod === 'POST') {
+    if (action === 'request-password-reset' && event.httpMethod === 'POST') {
       const { email } = body;
       const user = users.find(u => u.email === email);
       
@@ -170,7 +164,7 @@ export const handler = async (event, context) => {
     }
 
     // POST /reset-password
-    if (path === '/reset-password' && event.httpMethod === 'POST') {
+    if (action === 'reset-password' && event.httpMethod === 'POST') {
       const { token, password } = body;
       const resetData = resetTokens.get(token);
       
@@ -187,7 +181,7 @@ export const handler = async (event, context) => {
       return { statusCode: 200, headers, body: JSON.stringify({ success: true }) };
     }
 
-    return { statusCode: 404, headers, body: JSON.stringify({ error: `Not found: ${path}` }) };
+    return { statusCode: 404, headers, body: JSON.stringify({ error: `Not found: ${action} (path: ${event.path})` }) };
 
   } catch (error) {
     console.error('Auth error:', error);
