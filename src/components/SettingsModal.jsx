@@ -10,7 +10,7 @@ export default function SettingsModal({ isOpen, onClose, providers, setProviders
   const [keys, setKeys] = useState({});
   const [providerSettings, setProviderSettings] = useState({});
   const [showAddForm, setShowAddForm] = useState(false);
-  const [newApi, setNewApi] = useState({ name: '', limit: 1000, infoUrl: '', linkText: '', resetPeriod: 'monthly' });
+  const [newApi, setNewApi] = useState({ name: '', limit: 1000, billingLimit: '', infoUrl: '', linkText: '', resetPeriod: 'monthly' });
   const [testingKey, setTestingKey] = useState(null); // provider id being tested
   const [testResults, setTestResults] = useState({}); // { providerId: { valid, message, ... } }
 
@@ -23,6 +23,7 @@ export default function SettingsModal({ isOpen, onClose, providers, setProviders
         loadedSettings[p.id] = {
           name: p.name,
           limit: p.limit,
+          billingLimit: p.billingLimit || '',
           infoUrl: p.infoUrl || '',
           linkText: p.linkText || '',
           resetPeriod: p.resetPeriod || 'monthly',
@@ -48,6 +49,7 @@ export default function SettingsModal({ isOpen, onClose, providers, setProviders
       ...p,
       name: providerSettings[p.id]?.name || p.name,
       limit: providerSettings[p.id]?.limit || p.limit,
+      billingLimit: providerSettings[p.id]?.billingLimit || '',
       infoUrl: providerSettings[p.id]?.infoUrl || '',
       linkText: providerSettings[p.id]?.linkText || '',
       resetPeriod: providerSettings[p.id]?.resetPeriod || 'monthly',
@@ -68,6 +70,7 @@ export default function SettingsModal({ isOpen, onClose, providers, setProviders
       id,
       name: newApi.name,
       limit: parseInt(newApi.limit) || 1000,
+      billingLimit: newApi.billingLimit ? parseFloat(newApi.billingLimit) : '',
       color: COLORS[colorIndex],
       infoUrl: newApi.infoUrl || '',
       linkText: newApi.linkText || '',
@@ -77,10 +80,10 @@ export default function SettingsModal({ isOpen, onClose, providers, setProviders
     setProviders([...providers, newProvider]);
     setProviderSettings({
       ...providerSettings,
-      [id]: { limit: newProvider.limit, infoUrl: newProvider.infoUrl, linkText: newProvider.linkText, resetPeriod: newProvider.resetPeriod }
+      [id]: { limit: newProvider.limit, billingLimit: newProvider.billingLimit, infoUrl: newProvider.infoUrl, linkText: newProvider.linkText, resetPeriod: newProvider.resetPeriod }
     });
     setKeys({ ...keys, [id]: '' });
-    setNewApi({ name: '', limit: 1000, infoUrl: '', linkText: '', resetPeriod: 'monthly' });
+    setNewApi({ name: '', limit: 1000, billingLimit: '', infoUrl: '', linkText: '', resetPeriod: 'monthly' });
     setShowAddForm(false);
   };
 
@@ -285,7 +288,7 @@ export default function SettingsModal({ isOpen, onClose, providers, setProviders
                   {/* Limit */}
                   <div className="mb-3">
                     <label className="block text-xs font-medium text-gray-500 mb-1">
-                      Usage Limit
+                      Usage Limit <span className="text-gray-400">(calls per reset period)</span>
                     </label>
                     <input
                       type="number"
@@ -293,6 +296,25 @@ export default function SettingsModal({ isOpen, onClose, providers, setProviders
                       onChange={(e) => updateProviderSetting(provider.id, 'limit', parseInt(e.target.value) || 0)}
                       className="w-full p-2 border rounded text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
                     />
+                  </div>
+
+                  {/* Billing Limit */}
+                  <div className="mb-3">
+                    <label className="block text-xs font-medium text-gray-500 mb-1">
+                      Billing Limit <span className="text-gray-400">($ per reset period, empty = free tier)</span>
+                    </label>
+                    <div className="relative">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">$</span>
+                      <input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        value={providerSettings[provider.id]?.billingLimit || ''}
+                        onChange={(e) => updateProviderSetting(provider.id, 'billingLimit', e.target.value ? parseFloat(e.target.value) : '')}
+                        className="w-full p-2 pl-7 border rounded text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                        placeholder="0.00"
+                      />
+                    </div>
                   </div>
 
                   {/* Reset Period */}
@@ -359,13 +381,28 @@ export default function SettingsModal({ isOpen, onClose, providers, setProviders
                       />
                     </div>
                     <div className="mb-3">
-                      <label className="block text-xs font-medium text-gray-500 mb-1">Usage Limit</label>
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Usage Limit <span className="text-gray-400">(calls)</span></label>
                       <input
                         type="number"
                         value={newApi.limit}
                         onChange={(e) => setNewApi({ ...newApi, limit: e.target.value })}
                         className="w-full p-2 border rounded text-sm"
                       />
+                    </div>
+                    <div className="mb-3">
+                      <label className="block text-xs font-medium text-gray-500 mb-1">Billing Limit <span className="text-gray-400">($ empty = free tier)</span></label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">$</span>
+                        <input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          value={newApi.billingLimit}
+                          onChange={(e) => setNewApi({ ...newApi, billingLimit: e.target.value })}
+                          className="w-full p-2 pl-7 border rounded text-sm"
+                          placeholder="0.00"
+                        />
+                      </div>
                     </div>
                     <div className="mb-3">
                       <label className="block text-xs font-medium text-gray-500 mb-1">Reset Period</label>
