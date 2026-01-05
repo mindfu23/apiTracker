@@ -87,26 +87,36 @@ export function AuthProvider({ children, config: userConfig }: AuthProviderProps
   const checkAuth = useCallback(async () => {
     setIsLoading(true);
     try {
-      // First check local storage for cached user
+      // First check local storage for cached user and token
       const cached = localStorage.getItem(config.storageKey);
+      let token: string | null = null;
       if (cached) {
         try {
           const parsed = JSON.parse(cached);
           setUser(parsed.user);
+          token = parsed.token || null;
         } catch (e) {
           localStorage.removeItem(config.storageKey);
         }
       }
 
+      // Build headers - include token for mobile apps
+      const headers: HeadersInit = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       // Then verify with server
       const response = await fetch(`${config.apiBaseUrl}/me`, {
         credentials: 'include',
+        headers,
       });
 
       if (response.ok) {
         const data = await response.json();
         setUser(data.user);
-        localStorage.setItem(config.storageKey, JSON.stringify({ user: data.user }));
+        // Keep the token if we had one
+        localStorage.setItem(config.storageKey, JSON.stringify({ user: data.user, token }));
       } else {
         setUser(null);
         localStorage.removeItem(config.storageKey);
@@ -132,7 +142,8 @@ export function AuthProvider({ children, config: userConfig }: AuthProviderProps
 
       if (response.ok && data.user) {
         setUser(data.user);
-        localStorage.setItem(config.storageKey, JSON.stringify({ user: data.user }));
+        // Store both user and token (token is for mobile apps)
+        localStorage.setItem(config.storageKey, JSON.stringify({ user: data.user, token: data.token }));
         setShowAuthModal(false);
         return { success: true };
       } else {
@@ -157,7 +168,8 @@ export function AuthProvider({ children, config: userConfig }: AuthProviderProps
 
       if (response.ok && data.user) {
         setUser(data.user);
-        localStorage.setItem(config.storageKey, JSON.stringify({ user: data.user }));
+        // Store both user and token (token is for mobile apps)
+        localStorage.setItem(config.storageKey, JSON.stringify({ user: data.user, token: data.token }));
         setShowAuthModal(false);
         return { success: true };
       } else {
@@ -171,10 +183,25 @@ export function AuthProvider({ children, config: userConfig }: AuthProviderProps
   }, [config.apiBaseUrl, config.storageKey]);
 
   const logout = useCallback(async () => {
+    // Get token for mobile apps
+    let token: string | null = null;
     try {
+      const cached = localStorage.getItem(config.storageKey);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        token = parsed.token || null;
+      }
+    } catch (e) {}
+
+    try {
+      const headers: HeadersInit = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
       await fetch(`${config.apiBaseUrl}/logout`, {
         method: 'POST',
         credentials: 'include',
+        headers,
       });
     } catch (error) {
       console.error('Logout error:', error);
