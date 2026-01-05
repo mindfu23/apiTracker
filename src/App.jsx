@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import SettingsModal from './components/SettingsModal';
+import { useAuth, AuthModal } from './lib/auth';
 
 const DEFAULT_PROVIDERS = [
   { id: 'openai', name: 'OpenAI', limit: 1000, color: 'bg-green-500' },
@@ -19,6 +20,7 @@ function App() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newApi, setNewApi] = useState({ name: '', limit: 1000 });
   const [showSettings, setShowSettings] = useState(false);
+  const { user, logout, setShowAuthModal } = useAuth();
 
   useEffect(() => {
     localStorage.setItem('api_providers', JSON.stringify(providers));
@@ -101,10 +103,31 @@ function App() {
         <div className="flex justify-between items-center mb-6">
           <h1 className="text-2xl font-bold text-gray-800">API Usage Tracker</h1>
           <div className="flex items-center gap-4">
-            {lastUpdated && <span className="text-xs text-gray-500">Updated: {lastUpdated}</span>}
+            {lastUpdated && <span className="text-xs text-gray-500 hidden sm:inline">Updated: {lastUpdated}</span>}
+            
+            {user ? (
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-gray-700 hidden sm:inline">{user.displayName || user.email}</span>
+                <button 
+                  onClick={logout}
+                  className="text-sm text-red-600 hover:text-red-800"
+                >
+                  Logout
+                </button>
+              </div>
+            ) : (
+              <button 
+                onClick={() => setShowAuthModal(true)}
+                className="text-sm text-blue-600 hover:text-blue-800 font-medium"
+              >
+                Login
+              </button>
+            )}
+
             <button 
               onClick={() => setShowSettings(true)}
               className="text-gray-600 hover:text-gray-900"
+              title="Settings"
             >
               ⚙️
             </button>
@@ -116,6 +139,7 @@ function App() {
           onClose={() => setShowSettings(false)} 
           providers={providers} 
         />
+        <AuthModal />
 
         <div className="space-y-6">
           {providers.map(provider => {
