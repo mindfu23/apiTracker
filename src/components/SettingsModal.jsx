@@ -21,6 +21,7 @@ export default function SettingsModal({ isOpen, onClose, providers, setProviders
       providers.forEach(p => {
         loadedKeys[p.id] = localStorage.getItem(`api_key_${p.id}`) || '';
         loadedSettings[p.id] = {
+          name: p.name,
           limit: p.limit,
           infoUrl: p.infoUrl || '',
           linkText: p.linkText || '',
@@ -45,6 +46,7 @@ export default function SettingsModal({ isOpen, onClose, providers, setProviders
     // Update provider settings (limit, URLs)
     const updatedProviders = providers.map(p => ({
       ...p,
+      name: providerSettings[p.id]?.name || p.name,
       limit: providerSettings[p.id]?.limit || p.limit,
       infoUrl: providerSettings[p.id]?.infoUrl || '',
       linkText: providerSettings[p.id]?.linkText || '',
@@ -167,9 +169,14 @@ export default function SettingsModal({ isOpen, onClose, providers, setProviders
               {providers.map(provider => (
                 <div key={provider.id} className="border rounded-lg p-4 bg-gray-50">
                   <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 flex-1">
                       <div className={`w-3 h-3 rounded-full ${provider.color}`}></div>
-                      <span className="font-medium">{provider.name}</span>
+                      <input
+                        type="text"
+                        value={providerSettings[provider.id]?.name || provider.name}
+                        onChange={(e) => updateProviderSetting(provider.id, 'name', e.target.value)}
+                        className="font-medium bg-transparent border-b border-transparent hover:border-gray-300 focus:border-blue-500 focus:outline-none px-1 py-0.5 -ml-1"
+                      />
                     </div>
                     <button
                       onClick={() => handleDeleteApi(provider.id)}
@@ -258,7 +265,19 @@ export default function SettingsModal({ isOpen, onClose, providers, setProviders
                         </div>
                       )}
                       {testResults[provider.id].message && (
-                        <p className="text-gray-500 mt-1">{testResults[provider.id].message}</p>
+                        <p className="text-gray-500 mt-1">
+                          {testResults[provider.id].message}
+                          {testResults[provider.id].dashboardUrl && (
+                            <a 
+                              href={testResults[provider.id].dashboardUrl} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="ml-2 text-blue-600 hover:text-blue-800 underline"
+                            >
+                              View Dashboard →
+                            </a>
+                          )}
+                        </p>
                       )}
                     </div>
                   )}

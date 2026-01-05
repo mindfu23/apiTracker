@@ -114,7 +114,8 @@ async function testOpenAI(apiKey) {
     resetInfo: `Resets on the 1st of each month`,
     message: usage !== null 
       ? `Key valid. ${usage} requests this month.`
-      : 'Key valid. Usage data requires organization-level access.',
+      : 'Key valid. Usage tracking available in dashboard.',
+    dashboardUrl: 'https://platform.openai.com/usage',
   };
 }
 
@@ -181,7 +182,8 @@ async function testGemini(apiKey) {
     limit: null,
     resetPeriod: 'per-minute',
     resetInfo: 'Rate limits vary by model and tier',
-    message: 'Key valid. Usage tracking requires Google Cloud Console.',
+    message: 'Key valid. Usage tracking available in Google Cloud Console.',
+    dashboardUrl: 'https://console.cloud.google.com/apis/dashboard',
   };
 }
 
@@ -204,7 +206,8 @@ async function testHuggingFace(apiKey) {
     limit: null,
     resetPeriod: 'hourly',
     resetInfo: 'Rate limits vary by endpoint and account tier',
-    message: `Key valid. Authenticated as ${data.name || 'user'}.`,
+    message: `Key valid. Authenticated as ${data.name || 'user'}. Usage available in dashboard.`,
+    dashboardUrl: 'https://huggingface.co/settings/billing',
     accountType: data.type,
   };
 }
@@ -239,7 +242,8 @@ async function testPerplexity(apiKey) {
     limit: rateLimitLimit ? parseInt(rateLimitLimit) : null,
     resetPeriod: 'monthly',
     resetInfo: 'Check dashboard for detailed usage',
-    message: 'Key valid. Detailed usage available in Perplexity dashboard.',
+    message: 'Key valid. Detailed usage available in dashboard.',
+    dashboardUrl: 'https://www.perplexity.ai/settings/api',
   };
 }
 
@@ -296,6 +300,7 @@ async function testCohere(apiKey) {
     limit: null,
     resetPeriod: 'per-minute',
     resetInfo: 'Rate limits vary by tier',
-    message: data.valid ? 'Key valid.' : 'Invalid key.',
+    message: data.valid ? 'Key valid. Usage available in dashboard.' : 'Invalid key.',
+    dashboardUrl: data.valid ? 'https://dashboard.cohere.com/api-keys' : null,
   };
 }
