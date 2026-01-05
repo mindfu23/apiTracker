@@ -23,15 +23,31 @@ function App() {
   }, [providers]);
 
   useEffect(() => {
-    fetch('/usage.json')
-      .then(response => response.json())
+    // Try fetching from Netlify Function first
+    fetch('/.netlify/functions/get-usage')
+      .then(response => {
+        if (!response.ok) throw new Error('Function not available');
+        return response.json();
+      })
       .then(data => {
         setApiUsage(data);
         if (data.last_updated) {
           setLastUpdated(new Date(data.last_updated).toLocaleString());
         }
       })
-      .catch(err => console.error("Failed to load usage data", err));
+      .catch(() => {
+        // Fallback to static file if function fails (e.g. local dev without netlify cli)
+        console.log("Falling back to static usage.json");
+        fetch('/usage.json')
+          .then(response => response.json())
+          .then(data => {
+            setApiUsage(data);
+            if (data.last_updated) {
+              setLastUpdated(new Date(data.last_updated).toLocaleString());
+            }
+          })
+          .catch(err => console.error("Failed to load usage data", err));
+      });
   }, []);
 
   const handleAddApi = (e) => {
