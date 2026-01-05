@@ -2,13 +2,7 @@ import React, { useState, useEffect } from 'react';
 import SettingsModal from './components/SettingsModal';
 import { useAuth, AuthModal } from './lib/auth';
 
-const DEFAULT_PROVIDERS = [
-  { id: 'openai', name: 'OpenAI', limit: 1000, color: 'bg-green-500' },
-  { id: 'anthropic', name: 'Anthropic', limit: 1000, color: 'bg-purple-500' },
-  { id: 'perplexity', name: 'Perplexity', limit: 500, color: 'bg-blue-500' },
-  { id: 'gemini', name: 'Gemini', limit: 1000, color: 'bg-yellow-500' },
-  { id: 'huggingface', name: 'HuggingFace', limit: 2000, color: 'bg-orange-500' },
-];
+const DEFAULT_PROVIDERS = [];
 
 function App() {
   const [providers, setProviders] = useState(() => {
@@ -17,8 +11,6 @@ function App() {
   });
   const [apiUsage, setApiUsage] = useState({});
   const [lastUpdated, setLastUpdated] = useState(null);
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [newApi, setNewApi] = useState({ name: '', limit: 1000 });
   const [showSettings, setShowSettings] = useState(false);
   const { user, logout, setShowAuthModal } = useAuth();
 
@@ -78,24 +70,7 @@ function App() {
           })
           .catch(err => console.error("Failed to load usage data", err));
       });
-  }, []);
-
-  const handleAddApi = (e) => {
-    e.preventDefault();
-    if (!newApi.name) return;
-    
-    const id = newApi.name.toLowerCase().replace(/\s+/g, '-');
-    const newProvider = {
-      id,
-      name: newApi.name,
-      limit: parseInt(newApi.limit) || 1000,
-      color: 'bg-gray-500' // Default color
-    };
-    
-    setProviders([...providers, newProvider]);
-    setNewApi({ name: '', limit: 1000 });
-    setShowAddForm(false);
-  };
+  }, [providers]);
 
   return (
     <div className="min-h-screen bg-gray-100 p-8">
@@ -137,10 +112,25 @@ function App() {
         <SettingsModal 
           isOpen={showSettings} 
           onClose={() => setShowSettings(false)} 
-          providers={providers} 
+          providers={providers}
+          setProviders={setProviders}
         />
         <AuthModal />
 
+        {providers.length === 0 ? (
+          <div className="text-center py-12">
+            <div className="text-6xl mb-4">📊</div>
+            <h2 className="text-xl font-semibold text-gray-700 mb-2">Welcome to API Tracker!</h2>
+            <p className="text-gray-500 mb-6">Get started by adding your first API provider to track.</p>
+            <button
+              onClick={() => setShowSettings(true)}
+              className="bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors text-lg"
+            >
+              + Add Your First API
+            </button>
+          </div>
+        ) : (
+          <>
         <div className="space-y-6">
           {providers.map(provider => {
             const usage = apiUsage[provider.id] || 0;
@@ -149,7 +139,19 @@ function App() {
             return (
               <div key={provider.id} className="w-full">
                 <div className="flex justify-between mb-1">
-                  <span className="text-base font-medium text-gray-700">{provider.name}</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-base font-medium text-gray-700">{provider.name}</span>
+                    {provider.infoUrl && (
+                      <a
+                        href={provider.infoUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs text-blue-500 hover:text-blue-700 hover:underline"
+                      >
+                        {provider.linkText || provider.infoUrl}
+                      </a>
+                    )}
+                  </div>
                   <span className="text-sm font-medium text-gray-500">{usage} / {provider.limit} calls</span>
                 </div>
                 <div className="w-full bg-gray-200 rounded-full h-4">
@@ -164,42 +166,15 @@ function App() {
         </div>
 
         <div className="mt-8 pt-6 border-t border-gray-200">
-          {!showAddForm ? (
-            <button 
-              onClick={() => setShowAddForm(true)}
-              className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors"
-            >
-              Add API Provider
-            </button>
-          ) : (
-            <form onSubmit={handleAddApi} className="bg-gray-50 p-4 rounded-lg">
-              <h3 className="text-lg font-medium mb-3">New API Details</h3>
-              <div className="mb-3">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
-                <input 
-                  type="text" 
-                  value={newApi.name}
-                  onChange={e => setNewApi({...newApi, name: e.target.value})}
-                  className="w-full p-2 border rounded"
-                  placeholder="e.g. Midjourney"
-                />
-              </div>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Limit</label>
-                <input 
-                  type="number" 
-                  value={newApi.limit}
-                  onChange={e => setNewApi({...newApi, limit: e.target.value})}
-                  className="w-full p-2 border rounded"
-                />
-              </div>
-              <div className="flex gap-2">
-                <button type="submit" className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700">Save</button>
-                <button type="button" onClick={() => setShowAddForm(false)} className="bg-gray-400 text-white px-4 py-2 rounded hover:bg-gray-500">Cancel</button>
-              </div>
-            </form>
-          )}
+          <button 
+            onClick={() => setShowSettings(true)}
+            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors"
+          >
+            Manage API Providers
+          </button>
         </div>
+          </>
+        )}
       </div>
     </div>
   );
