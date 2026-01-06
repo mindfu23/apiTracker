@@ -1,8 +1,8 @@
 {
-  "openai": 120,
-  "anthropic": 450,
-  "perplexity": 80,
-  "gemini": 300,
-  "huggingface": 1500,
-  "last_updated": "2026-01-04T12:00:00"
+  "openai": 0,
+  "anthropic": 0,
+  "perplexity": 0,
+  "gemini": 0,
+  "huggingface": 0,
+  "last_updated": "2026-01-06T00:17:34.342940"
 }
