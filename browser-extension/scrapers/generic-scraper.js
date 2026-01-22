@@ -2,14 +2,40 @@
  * Generic Page Scraper
  * Attempts to extract billing/usage data from any page
  * Uses pattern matching to find common billing-related information
+ *
+ * NOTE: This scraper should NOT run on pages that have dedicated scrapers.
+ * It checks the URL against known provider patterns and skips those pages.
  */
 
 (function() {
   const PROVIDER_ID = 'generic';
 
+  // URLs that have dedicated scrapers - don't run generic on these
+  const KNOWN_PROVIDER_URLS = [
+    'platform.claude.com',
+    'console.anthropic.com',
+    'platform.openai.com',
+    'github.com/settings/billing',
+    'claude.ai/settings',
+    'console.cloud.google.com',
+    'perplexity.ai/account',
+    'perplexity.ai/settings'
+  ];
+
   browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === 'scrape') {
       try {
+        const currentUrl = window.location.href;
+
+        // Check if this page has a dedicated scraper
+        const hasKnownScraper = KNOWN_PROVIDER_URLS.some(url => currentUrl.includes(url));
+        if (hasKnownScraper) {
+          // Let the dedicated scraper handle this page
+          // Return a non-success to indicate this scraper shouldn't be used
+          sendResponse({ success: false, error: 'Page handled by dedicated scraper' });
+          return true;
+        }
+
         const data = scrapeGenericPage();
         sendResponse({ success: true, provider: data.detectedProvider || PROVIDER_ID, data });
       } catch (error) {
@@ -31,12 +57,14 @@
     const hostname = window.location.hostname;
 
     // Try to detect provider from hostname
+    // Map to the correct provider IDs used by dedicated scrapers
     const providerPatterns = {
-      'anthropic': /anthropic|claude/i,
+      'anthropic': /anthropic/i,
       'openai': /openai/i,
-      'google': /google|cloud\.google/i,
-      'github': /github/i,
+      'google-cloud': /cloud\.google/i,
+      'github-copilot': /github/i,
       'perplexity': /perplexity/i,
+      'claude-ai': /claude\.ai/i,
       'cohere': /cohere/i,
       'huggingface': /huggingface|hugging/i,
       'groq': /groq/i,
@@ -47,10 +75,11 @@
       'azure': /azure|microsoft/i
     };
 
-    for (const [provider, pattern] of Object.entries(providerPatterns)) {
+    for (const [providerId, pattern] of Object.entries(providerPatterns)) {
       if (pattern.test(hostname) || pattern.test(document.title)) {
-        data.detectedProvider = provider;
-        data.provider = provider.charAt(0).toUpperCase() + provider.slice(1);
+        data.detectedProvider = providerId;
+        // Create a display name from the ID
+        data.provider = providerId.split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
         break;
       }
     }

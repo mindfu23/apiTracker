@@ -216,6 +216,63 @@
       }
     });
 
+    // Token usage patterns for platform.claude.com/usage
+    // Pattern: "Total tokens in" followed by number
+    const tokensInMatch = pageText.match(/Total\s+tokens\s+in[:\s]*([\d,]+)/i);
+    if (tokensInMatch) {
+      data.tokensIn = parseInt(tokensInMatch[1].replace(/,/g, ''));
+    }
+
+    // Pattern: "Total tokens out" followed by number
+    const tokensOutMatch = pageText.match(/Total\s+tokens\s+out[:\s]*([\d,]+)/i);
+    if (tokensOutMatch) {
+      data.tokensOut = parseInt(tokensOutMatch[1].replace(/,/g, ''));
+    }
+
+    // Calculate total tokens if we have both
+    if (data.tokensIn !== undefined && data.tokensOut !== undefined) {
+      data.totalTokens = data.tokensIn + data.tokensOut;
+    }
+
+    // Pattern: "Total web searches"
+    const webSearchMatch = pageText.match(/Total\s+web\s+searches[:\s]*([\d,]+)/i);
+    if (webSearchMatch) {
+      data.webSearches = parseInt(webSearchMatch[1].replace(/,/g, ''));
+    }
+
+    // Alternative: Look for token numbers in specific card-like elements
+    // The page might have cards with "Total tokens in", "Total tokens out", etc.
+    const allElements = document.querySelectorAll('*');
+    allElements.forEach(el => {
+      const text = el.textContent?.trim();
+      if (!text) return;
+
+      // Check if this element contains just a label and is followed by a number
+      if (text === 'Total tokens in' || text === 'Total tokens out' || text === 'Total web searches') {
+        // Look at next sibling or parent's next child for the number
+        const parent = el.parentElement;
+        if (parent) {
+          const parentText = parent.textContent;
+          const numMatch = parentText.match(/(?:Total\s+tokens\s+(?:in|out)|Total\s+web\s+searches)[^\d]*([\d,]+)/i);
+          if (numMatch) {
+            const value = parseInt(numMatch[1].replace(/,/g, ''));
+            if (text.includes('tokens in') && !data.tokensIn) {
+              data.tokensIn = value;
+            } else if (text.includes('tokens out') && !data.tokensOut) {
+              data.tokensOut = value;
+            } else if (text.includes('web searches') && !data.webSearches) {
+              data.webSearches = value;
+            }
+          }
+        }
+      }
+    });
+
+    // Recalculate total if we found tokens via DOM
+    if (data.tokensIn !== undefined && data.tokensOut !== undefined && !data.totalTokens) {
+      data.totalTokens = data.tokensIn + data.tokensOut;
+    }
+
     return data;
   }
 })();

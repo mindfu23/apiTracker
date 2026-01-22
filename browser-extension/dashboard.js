@@ -257,6 +257,15 @@ function extractStats(providerId, data) {
   if (data.rateLimit !== undefined) {
     stats.push({ label: 'Rate Limit', value: `${data.rateLimit.toLocaleString()} RPM` });
   }
+  if (data.tokensIn !== undefined) {
+    stats.push({ label: 'Tokens In', value: data.tokensIn.toLocaleString() });
+  }
+  if (data.tokensOut !== undefined) {
+    stats.push({ label: 'Tokens Out', value: data.tokensOut.toLocaleString() });
+  }
+  if (data.webSearches !== undefined) {
+    stats.push({ label: 'Web Searches', value: data.webSearches.toLocaleString() });
+  }
   if (data.modelUsage && Object.keys(data.modelUsage).length > 0) {
     const models = Object.entries(data.modelUsage)
       .map(([model, cost]) => `${model}: $${cost}`)
