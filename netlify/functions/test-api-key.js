@@ -519,9 +519,13 @@ async function testGitHubCopilot(apiKey) {
 
   const usageData = await usageRes.json();
 
+  // Log the full response structure for debugging
+  console.log('[GitHub Copilot] API Response:', JSON.stringify(usageData, null, 2));
+
   // Parse usage items - sum up premium requests
   let totalUsage = 0;
-  let premiumLimit = 300; // Default Copilot Pro limit (varies by plan)
+  let includedUsage = 0;
+  let billedUsage = 0;
   const usageByModel = {};
 
   if (usageData.usage_items && Array.isArray(usageData.usage_items)) {
@@ -529,49 +533,92 @@ async function testGitHubCopilot(apiKey) {
       const quantity = item.quantity || 0;
       totalUsage += quantity;
 
+      // Track included vs billed separately if available
+      if (item.included_requests !== undefined) {
+        includedUsage += item.included_requests || 0;
+      }
+      if (item.billed_requests !== undefined) {
+        billedUsage += item.billed_requests || 0;
+      }
+
       // Track by model for detailed breakdown
       const model = item.sku_description || item.model || 'Unknown';
-      usageByModel[model] = (usageByModel[model] || 0) + quantity;
+      if (!usageByModel[model]) {
+        usageByModel[model] = { total: 0, included: 0, billed: 0 };
+      }
+      usageByModel[model].total += quantity;
+      usageByModel[model].included += item.included_requests || 0;
+      usageByModel[model].billed += item.billed_requests || 0;
     });
   }
 
-  // Detect tier based on usage limits or billing info
-  // Copilot Individual: ~300 premium requests/month
-  // Copilot Business: higher limits
-  // Copilot Enterprise: even higher
-  let detectedTier = 'Individual';
-  if (usageData.included_premium_requests) {
-    premiumLimit = usageData.included_premium_requests;
-    if (premiumLimit >= 1000) {
-      detectedTier = 'Enterprise';
-    } else if (premiumLimit >= 500) {
-      detectedTier = 'Business';
-    }
+  // Extract the premium limit from multiple possible fields
+  // The API may return this in different ways depending on the endpoint version
+  let premiumLimit =
+    usageData.included_premium_requests ||      // Primary field
+    usageData.premium_requests_included ||      // Alternate naming
+    usageData.limit ||                          // Generic limit field
+    usageData.monthly_limit ||                  // Monthly limit field
+    usageData.included ||                       // Short form
+    300;                                        // Fallback default
+
+  // If we have a "of X included" type structure, look for it
+  if (usageData.total_included !== undefined) {
+    premiumLimit = usageData.total_included;
+  }
+
+  // Detect tier based on the actual limit
+  // Copilot Free: 50 premium requests/month (limited models)
+  // Copilot Pro: 300-1500 premium requests/month depending on plan
+  // Copilot Business: varies by org
+  // Copilot Enterprise: higher limits
+  let detectedTier = 'Free';
+  if (premiumLimit >= 1500) {
+    detectedTier = 'Pro Max';
+  } else if (premiumLimit >= 1000) {
+    detectedTier = 'Pro';
+  } else if (premiumLimit >= 500) {
+    detectedTier = 'Pro';
+  } else if (premiumLimit >= 300) {
+    detectedTier = 'Pro';
+  } else if (premiumLimit >= 50) {
+    detectedTier = 'Free';
   }
 
   // Calculate reset date (monthly on billing date)
   const now = new Date();
   const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, now.getDate());
 
+  // Calculate remaining - use included usage if we tracked it separately
+  const usedFromIncluded = includedUsage > 0 ? includedUsage : totalUsage;
+  const remaining = Math.max(0, premiumLimit - usedFromIncluded);
+
+  // Format usage by model for display
+  const modelBreakdown = Object.keys(usageByModel).length > 0 ? usageByModel : null;
+
   return {
     valid: true,
     provider: 'GitHub Copilot',
-    usage: totalUsage,
+    usage: Math.round(usedFromIncluded * 100) / 100, // Round to 2 decimals (can be fractional)
     limit: premiumLimit,
     resetPeriod: 'monthly',
     resetDate: nextMonth.toISOString(),
     resetInfo: 'Resets on your monthly billing date',
     subscriptionTier: detectedTier,
-    message: `Authenticated as ${username}. ${totalUsage}/${premiumLimit} premium requests used.`,
+    message: `Authenticated as ${username}. ${Math.round(usedFromIncluded)}/${premiumLimit} premium requests used.`,
     dashboardUrl: 'https://github.com/settings/billing/summary',
     username: username,
-    usageByModel: Object.keys(usageByModel).length > 0 ? usageByModel : null,
+    usageByModel: modelBreakdown,
+    billedRequests: billedUsage > 0 ? billedUsage : null,
+    billedAmount: usageData.billed_amount || usageData.total_billed || null,
     rateLimits: {
       premiumRequests: {
         limit: premiumLimit,
-        used: totalUsage,
-        remaining: Math.max(0, premiumLimit - totalUsage)
+        used: Math.round(usedFromIncluded * 100) / 100,
+        remaining: Math.round(remaining * 100) / 100
       }
-    }
+    },
+    // Include raw API response for debugging (remove in production)
+    _rawResponse: usageData
   };
 }

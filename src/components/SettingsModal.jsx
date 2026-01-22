@@ -75,13 +75,13 @@ const PROVIDER_PRESETS = {
   },
   'github-copilot': {
     name: 'GitHub Copilot',
-    limit: 300,
+    limit: 1500,
     resetPeriod: 'monthly',
-    infoUrl: 'https://github.com/settings/billing/summary',
-    linkText: 'Billing',
+    infoUrl: 'https://github.com/settings/billing/premium_requests_usage',
+    linkText: 'Premium Usage',
     color: 'bg-gray-800',
     requiresUsername: true,
-    description: 'Requires Fine-Grained PAT with "Plan" read permission'
+    description: 'Requires Fine-Grained PAT with "Plan" read permission. Test to fetch your actual limit.'
   }
 };
 
