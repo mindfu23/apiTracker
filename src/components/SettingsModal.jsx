@@ -72,6 +72,16 @@ const PROVIDER_PRESETS = {
     linkText: 'Billing',
     color: 'bg-yellow-500',
     description: 'Inference API with model hosting'
+  },
+  'github-copilot': {
+    name: 'GitHub Copilot',
+    limit: 300,
+    resetPeriod: 'monthly',
+    infoUrl: 'https://github.com/settings/billing/summary',
+    linkText: 'Billing',
+    color: 'bg-gray-800',
+    requiresUsername: true,
+    description: 'Requires Fine-Grained PAT with "Plan" read permission'
   }
 };
 

@@ -63,9 +63,13 @@ async function testProvider(provider, apiKey) {
       return await testGroq(apiKey);
     case 'cohere':
       return await testCohere(apiKey);
+    case 'github copilot':
+    case 'github-copilot':
+    case 'github':
+      return await testGitHubCopilot(apiKey);
     default:
-      return { 
-        valid: null, 
+      return {
+        valid: null,
         message: 'Unknown provider - cannot auto-detect limits. Please enter manually.',
         manualOnly: true
       };
@@ -454,5 +458,120 @@ async function testCohere(apiKey) {
     resetInfo: 'Rate limits vary by tier',
     message: data.valid ? 'Key valid. Usage available in dashboard.' : 'Invalid key.',
     dashboardUrl: data.valid ? 'https://dashboard.cohere.com/api-keys' : null,
+  };
+}
+
+// GitHub Copilot - Premium Request Usage API
+// Requires Fine-Grained Personal Access Token with "Plan" (user) read permission
+// API: GET /users/{username}/settings/billing/premium_request/usage
+async function testGitHubCopilot(apiKey) {
+  // First, get the authenticated user's username
+  const userRes = await fetch('https://api.github.com/user', {
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Accept': 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28'
+    }
+  });
+
+  if (!userRes.ok) {
+    if (userRes.status === 401) {
+      throw new Error('Invalid Personal Access Token');
+    }
+    const err = await userRes.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to authenticate with GitHub');
+  }
+
+  const userData = await userRes.json();
+  const username = userData.login;
+
+  // Now fetch the Copilot premium usage data
+  const usageRes = await fetch(
+    `https://api.github.com/users/${username}/settings/billing/premium_request/usage`,
+    {
+      headers: {
+        'Authorization': `Bearer ${apiKey}`,
+        'Accept': 'application/vnd.github+json',
+        'X-GitHub-Api-Version': '2022-11-28'
+      }
+    }
+  );
+
+  // If we can't access billing data, the token may not have "Plan" permission
+  if (!usageRes.ok) {
+    if (usageRes.status === 403 || usageRes.status === 404) {
+      return {
+        valid: true,
+        provider: 'GitHub Copilot',
+        usage: null,
+        limit: null,
+        resetPeriod: 'monthly',
+        resetInfo: 'Resets on your billing date',
+        message: `Authenticated as ${username}. Grant "Plan" permission to PAT for usage data.`,
+        dashboardUrl: 'https://github.com/settings/billing/summary',
+        username: username,
+        note: 'Create a Fine-Grained PAT with "Plan" (read) permission for full usage data'
+      };
+    }
+    const err = await usageRes.json().catch(() => ({}));
+    throw new Error(err.message || 'Failed to fetch usage data');
+  }
+
+  const usageData = await usageRes.json();
+
+  // Parse usage items - sum up premium requests
+  let totalUsage = 0;
+  let premiumLimit = 300; // Default Copilot Pro limit (varies by plan)
+  const usageByModel = {};
+
+  if (usageData.usage_items && Array.isArray(usageData.usage_items)) {
+    usageData.usage_items.forEach(item => {
+      const quantity = item.quantity || 0;
+      totalUsage += quantity;
+
+      // Track by model for detailed breakdown
+      const model = item.sku_description || item.model || 'Unknown';
+      usageByModel[model] = (usageByModel[model] || 0) + quantity;
+    });
+  }
+
+  // Detect tier based on usage limits or billing info
+  // Copilot Individual: ~300 premium requests/month
+  // Copilot Business: higher limits
+  // Copilot Enterprise: even higher
+  let detectedTier = 'Individual';
+  if (usageData.included_premium_requests) {
+    premiumLimit = usageData.included_premium_requests;
+    if (premiumLimit >= 1000) {
+      detectedTier = 'Enterprise';
+    } else if (premiumLimit >= 500) {
+      detectedTier = 'Business';
+    }
+  }
+
+  // Calculate reset date (monthly on billing date)
+  const now = new Date();
+  const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, now.getDate());
+
+  return {
+    valid: true,
+    provider: 'GitHub Copilot',
+    usage: totalUsage,
+    limit: premiumLimit,
+    resetPeriod: 'monthly',
+    resetDate: nextMonth.toISOString(),
+    resetInfo: 'Resets on your monthly billing date',
+    subscriptionTier: detectedTier,
+    message: `Authenticated as ${username}. ${totalUsage}/${premiumLimit} premium requests used.`,
+    dashboardUrl: 'https://github.com/settings/billing/summary',
+    username: username,
+    usageByModel: Object.keys(usageByModel).length > 0 ? usageByModel : null,
+    rateLimits: {
+      premiumRequests: {
+        limit: premiumLimit,
+        used: totalUsage,
+        remaining: Math.max(0, premiumLimit - totalUsage)
+      }
+    }
   };
 }

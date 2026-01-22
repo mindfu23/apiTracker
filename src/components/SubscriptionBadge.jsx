@@ -101,7 +101,9 @@ export function ProviderBadge({ provider, size = 'md' }) {
       google: { bg: 'bg-blue-500', text: 'text-white', abbrev: 'GCP' },
       groq: { bg: 'bg-purple-500', text: 'text-white', abbrev: 'GRQ' },
       cohere: { bg: 'bg-indigo-500', text: 'text-white', abbrev: 'COH' },
-      huggingface: { bg: 'bg-yellow-400', text: 'text-gray-900', abbrev: 'HF' }
+      huggingface: { bg: 'bg-yellow-400', text: 'text-gray-900', abbrev: 'HF' },
+      'github copilot': { bg: 'bg-gray-800', text: 'text-white', abbrev: 'GH' },
+      github: { bg: 'bg-gray-800', text: 'text-white', abbrev: 'GH' }
     };
 
     return styles[providerLower] || { bg: 'bg-gray-500', text: 'text-white', abbrev: provider?.slice(0, 3).toUpperCase() || '???' };
