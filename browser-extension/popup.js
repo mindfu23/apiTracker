@@ -170,11 +170,18 @@ async function addCurrentAsCustomPage(url) {
   const name = prompt('Enter a name for this page:', hostname);
   if (!name) return;
 
+  // Ask for optional custom search term
+  const searchTerm = prompt(
+    'Optional: Enter a keyword to search for (e.g., "credits", "tokens", "requests"):\n\nLeave blank to use default billing patterns.',
+    ''
+  );
+
   const customPages = await getCustomPages();
   const newPage = {
     id: `custom-${Date.now()}`,
     name: name,
     url: url,
+    searchTerm: searchTerm ? searchTerm.trim() : null,
     addedAt: new Date().toISOString()
   };
 
@@ -211,7 +218,7 @@ async function renderCustomPages() {
     <div class="custom-page-item">
       <div class="custom-page-info">
         <div class="custom-page-name">${page.name}</div>
-        <div class="custom-page-url">${new URL(page.url).hostname}</div>
+        <div class="custom-page-url">${new URL(page.url).hostname}${page.searchTerm ? ` · "${page.searchTerm}"` : ''}</div>
       </div>
       <button class="mini-btn danger" data-remove="${page.id}" title="Remove">×</button>
     </div>
@@ -291,7 +298,21 @@ function setupEventListeners() {
 
     try {
       const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
-      const result = await browser.tabs.sendMessage(tab.id, { action: 'scrape' });
+      const currentUrl = tab.url || '';
+
+      // Check if this is a custom page with a search term
+      const customPages = await getCustomPages();
+      const matchingCustomPage = customPages.find(page =>
+        currentUrl.includes(new URL(page.url).hostname)
+      );
+
+      // Build the scrape message, including searchTerm if available
+      const scrapeMessage = { action: 'scrape' };
+      if (matchingCustomPage && matchingCustomPage.searchTerm) {
+        scrapeMessage.searchTerm = matchingCustomPage.searchTerm;
+      }
+
+      const result = await browser.tabs.sendMessage(tab.id, scrapeMessage);
 
       if (result && result.success) {
         await saveScrapedData(result.provider, result.data);

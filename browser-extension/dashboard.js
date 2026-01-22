@@ -312,6 +312,14 @@ function extractStats(providerId, data) {
     stats.push({ label: 'Plan', value: data.plan });
   }
 
+  // Custom search term results
+  if (data.customSearchTerm && data.customTermValue !== undefined) {
+    stats.push({ label: data.customSearchTerm, value: data.customTermValue.toLocaleString() });
+  } else if (data.customSearchTerm && data.customTermMatches && data.customTermMatches.length > 0) {
+    // Show first match if no numeric value was extracted
+    stats.push({ label: data.customSearchTerm, value: data.customTermMatches[0].slice(0, 50) });
+  }
+
   return stats.slice(0, 6); // Limit to 6 stats for grid layout
 }
 

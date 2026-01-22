@@ -36,7 +36,9 @@
           return true;
         }
 
-        const data = scrapeGenericPage();
+        // Pass custom search term if provided
+        const customSearchTerm = message.searchTerm || null;
+        const data = scrapeGenericPage(customSearchTerm);
         sendResponse({ success: true, provider: data.detectedProvider || PROVIDER_ID, data });
       } catch (error) {
         sendResponse({ success: false, error: error.message });
@@ -45,7 +47,7 @@
     return true;
   });
 
-  function scrapeGenericPage() {
+  function scrapeGenericPage(customSearchTerm = null) {
     const data = {
       provider: 'Unknown',
       scrapedAt: new Date().toISOString(),
@@ -55,6 +57,47 @@
 
     const pageText = document.body.innerText;
     const hostname = window.location.hostname;
+
+    // If a custom search term was provided, scan for it
+    if (customSearchTerm) {
+      data.customSearchTerm = customSearchTerm;
+      const termLower = customSearchTerm.toLowerCase();
+      const lines = pageText.split('\n');
+
+      // Find lines containing the search term
+      const matchingLines = [];
+      lines.forEach((line, idx) => {
+        if (line.toLowerCase().includes(termLower)) {
+          const trimmed = line.trim();
+          if (trimmed.length > 0 && trimmed.length < 200) {
+            matchingLines.push(trimmed);
+          }
+        }
+      });
+
+      if (matchingLines.length > 0) {
+        data.customTermMatches = matchingLines.slice(0, 10); // Limit to 10 matches
+      }
+
+      // Try to extract numbers near the search term
+      // Pattern: "searchTerm: X" or "searchTerm X" or "X searchTerm"
+      const numPatterns = [
+        new RegExp(`${customSearchTerm}[:\\s]*([\\d,]+\\.?\\d*)`, 'i'),
+        new RegExp(`([\\d,]+\\.?\\d*)\\s*${customSearchTerm}`, 'i'),
+        new RegExp(`${customSearchTerm}[^\\d]*([\\d,]+\\.?\\d*)`, 'i')
+      ];
+
+      for (const pattern of numPatterns) {
+        const match = pageText.match(pattern);
+        if (match && match[1]) {
+          const numVal = parseFloat(match[1].replace(/,/g, ''));
+          if (!isNaN(numVal)) {
+            data.customTermValue = numVal;
+            break;
+          }
+        }
+      }
+    }
 
     // Try to detect provider from hostname
     // Map to the correct provider IDs used by dedicated scrapers
