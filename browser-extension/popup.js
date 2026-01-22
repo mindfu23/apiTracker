@@ -6,11 +6,11 @@
 const PROVIDERS = [
   {
     id: 'anthropic',
-    name: 'Anthropic',
+    name: 'Anthropic API',
     color: '#f97316',
     abbrev: 'ANT',
-    urls: ['console.anthropic.com'],
-    dashboardUrl: 'https://console.anthropic.com/settings/usage'
+    urls: ['platform.claude.com', 'console.anthropic.com'],
+    dashboardUrl: 'https://platform.claude.com/usage'
   },
   {
     id: 'openai',
@@ -25,7 +25,7 @@ const PROVIDERS = [
     name: 'Claude.ai',
     color: '#f97316',
     abbrev: 'CLD',
-    urls: ['claude.ai'],
+    urls: ['claude.ai/settings'],
     dashboardUrl: 'https://claude.ai/settings/usage'
   },
   {
@@ -49,19 +49,185 @@ const PROVIDERS = [
     name: 'Perplexity',
     color: '#06b6d4',
     abbrev: 'PPX',
-    urls: ['perplexity.ai/settings'],
-    dashboardUrl: 'https://www.perplexity.ai/settings/api'
+    urls: ['perplexity.ai/account', 'perplexity.ai/settings'],
+    dashboardUrl: 'https://www.perplexity.ai/account/api/billing'
   }
 ];
+
+// Storage keys
+const CUSTOM_PAGES_KEY = 'custom_scrape_pages';
 
 // Storage key for collected data
 const STORAGE_KEY = 'api_usage_data';
 
 // Initialize popup
 document.addEventListener('DOMContentLoaded', async () => {
+  await detectCurrentPage();
   await renderProviderList();
+  await renderCustomPages();
   setupEventListeners();
+
+  // Auto-scrape current page if it's a known provider page
+  await autoScrapeCurrentPage();
 });
+
+// Auto-scrape if on a known provider page
+async function autoScrapeCurrentPage() {
+  try {
+    const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+    const currentUrl = tab.url || '';
+
+    // Check if on a known provider page
+    const matchedProvider = PROVIDERS.find(p =>
+      p.urls.some(url => currentUrl.includes(url))
+    );
+
+    if (matchedProvider) {
+      // Auto-scrape this page
+      const btn = document.getElementById('scrapeCurrentBtn');
+      btn.textContent = 'Auto-scraping...';
+      btn.classList.add('loading');
+
+      try {
+        const result = await browser.tabs.sendMessage(tab.id, { action: 'scrape' });
+        if (result && result.success) {
+          await saveScrapedData(result.provider, result.data);
+          showDataPreview(result.data);
+          await renderProviderList();
+          btn.textContent = 'Scraped!';
+        } else {
+          btn.textContent = 'Scrape Current Page';
+        }
+      } catch (e) {
+        btn.textContent = 'Scrape Current Page';
+      }
+
+      setTimeout(() => {
+        btn.textContent = 'Scrape Current Page';
+        btn.classList.remove('loading');
+      }, 1500);
+    }
+  } catch (e) {
+    console.log('Auto-scrape not available:', e.message);
+  }
+}
+
+// Detect current page and show relevant info
+async function detectCurrentPage() {
+  const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+  const currentUrl = tab.url || '';
+  const detectionSection = document.getElementById('pageDetection');
+  const detectedInfo = document.getElementById('detectedInfo');
+
+  // Check if on a known provider page
+  const matchedProvider = PROVIDERS.find(p =>
+    p.urls.some(url => currentUrl.includes(url))
+  );
+
+  // Look for billing-related keywords in URL
+  const billingKeywords = ['billing', 'usage', 'credits', 'account', 'subscription', 'plan', 'cost', 'spend', 'payment'];
+  const hasBillingKeyword = billingKeywords.some(kw => currentUrl.toLowerCase().includes(kw));
+
+  if (matchedProvider) {
+    detectionSection.style.display = 'block';
+    detectionSection.className = 'detection-section detected-known';
+    detectedInfo.innerHTML = `
+      <div class="detected-provider">
+        <div class="provider-icon" style="background: ${matchedProvider.color}">${matchedProvider.abbrev}</div>
+        <div>
+          <strong>${matchedProvider.name}</strong> page detected
+          <div class="detected-hint">Click "Scrape Current Page" to collect data</div>
+        </div>
+      </div>
+    `;
+  } else if (hasBillingKeyword) {
+    detectionSection.style.display = 'block';
+    detectionSection.className = 'detection-section detected-potential';
+    const hostname = new URL(currentUrl).hostname;
+    detectedInfo.innerHTML = `
+      <div class="detected-potential-page">
+        <strong>Potential billing page detected</strong>
+        <div class="detected-hint">${hostname}</div>
+        <button class="mini-btn" id="addCustomPageBtn">+ Add as custom page</button>
+      </div>
+    `;
+
+    // Bind the add custom page button
+    setTimeout(() => {
+      const addBtn = document.getElementById('addCustomPageBtn');
+      if (addBtn) {
+        addBtn.addEventListener('click', () => addCurrentAsCustomPage(currentUrl));
+      }
+    }, 0);
+  } else {
+    detectionSection.style.display = 'none';
+  }
+}
+
+// Add current page as custom scrape target
+async function addCurrentAsCustomPage(url) {
+  const hostname = new URL(url).hostname;
+  const name = prompt('Enter a name for this page:', hostname);
+  if (!name) return;
+
+  const customPages = await getCustomPages();
+  const newPage = {
+    id: `custom-${Date.now()}`,
+    name: name,
+    url: url,
+    addedAt: new Date().toISOString()
+  };
+
+  customPages.push(newPage);
+  await browser.storage.local.set({ [CUSTOM_PAGES_KEY]: customPages });
+  await renderCustomPages();
+
+  // Update detection section
+  const detectionSection = document.getElementById('pageDetection');
+  detectionSection.className = 'detection-section detected-known';
+  document.getElementById('detectedInfo').innerHTML = `
+    <div class="detected-potential-page">
+      <strong>Page added!</strong>
+      <div class="detected-hint">Click "Scrape Current Page" to collect data</div>
+    </div>
+  `;
+}
+
+async function getCustomPages() {
+  const result = await browser.storage.local.get(CUSTOM_PAGES_KEY);
+  return result[CUSTOM_PAGES_KEY] || [];
+}
+
+async function renderCustomPages() {
+  const customPages = await getCustomPages();
+  const container = document.getElementById('customPagesList');
+
+  if (customPages.length === 0) {
+    container.innerHTML = '<div class="no-custom-pages">No custom pages added yet</div>';
+    return;
+  }
+
+  container.innerHTML = customPages.map(page => `
+    <div class="custom-page-item">
+      <div class="custom-page-info">
+        <div class="custom-page-name">${page.name}</div>
+        <div class="custom-page-url">${new URL(page.url).hostname}</div>
+      </div>
+      <button class="mini-btn danger" data-remove="${page.id}" title="Remove">×</button>
+    </div>
+  `).join('');
+
+  // Bind remove buttons
+  container.querySelectorAll('[data-remove]').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const id = e.target.dataset.remove;
+      const pages = await getCustomPages();
+      const filtered = pages.filter(p => p.id !== id);
+      await browser.storage.local.set({ [CUSTOM_PAGES_KEY]: filtered });
+      await renderCustomPages();
+    });
+  });
+}
 
 async function renderProviderList() {
   const container = document.getElementById('providerList');
@@ -101,6 +267,21 @@ async function renderProviderList() {
 }
 
 function setupEventListeners() {
+  // Toggle custom pages section
+  document.getElementById('customPagesToggle').addEventListener('click', () => {
+    const content = document.getElementById('customPagesContent');
+    const toggle = document.getElementById('customPagesToggle');
+    toggle.parentElement.classList.toggle('collapsed');
+  });
+
+  // Manual add custom page button
+  document.getElementById('addCustomPageManual').addEventListener('click', async () => {
+    const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+    if (tab.url) {
+      await addCurrentAsCustomPage(tab.url);
+    }
+  });
+
   // Scrape current page
   document.getElementById('scrapeCurrentBtn').addEventListener('click', async () => {
     const btn = document.getElementById('scrapeCurrentBtn');

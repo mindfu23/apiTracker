@@ -1,9 +1,19 @@
 /**
  * API Usage Scraper - Background Script
- * Handles message passing and storage management
+ * Handles message passing, storage management, and background scraping
  */
 
-// Listen for messages from content scripts
+// Provider configurations for background scraping
+const PROVIDERS = [
+  { id: 'anthropic', urls: ['platform.claude.com', 'console.anthropic.com'], dashboardUrl: 'https://platform.claude.com/usage' },
+  { id: 'openai', urls: ['platform.openai.com'], dashboardUrl: 'https://platform.openai.com/usage' },
+  { id: 'claude-ai', urls: ['claude.ai/settings'], dashboardUrl: 'https://claude.ai/settings/usage' },
+  { id: 'github-copilot', urls: ['github.com/settings/billing'], dashboardUrl: 'https://github.com/settings/billing/premium_requests_usage' },
+  { id: 'google-cloud', urls: ['console.cloud.google.com'], dashboardUrl: 'https://console.cloud.google.com/billing' },
+  { id: 'perplexity', urls: ['perplexity.ai/account', 'perplexity.ai/settings'], dashboardUrl: 'https://www.perplexity.ai/account/api/billing' }
+];
+
+// Listen for messages from content scripts and popup/dashboard
 browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'saveData') {
     saveScrapedData(message.provider, message.data)
@@ -18,7 +28,67 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
       .catch(err => sendResponse({ success: false, error: err.message }));
     return true;
   }
+
+  // Refresh all providers by scraping any open tabs that match
+  if (message.action === 'refreshAll') {
+    refreshAllProviders()
+      .then(() => sendResponse({ success: true }))
+      .catch(err => sendResponse({ success: false, error: err.message }));
+    return true;
+  }
+
+  // Scrape a specific tab
+  if (message.action === 'scrapeTab') {
+    scrapeTab(message.tabId)
+      .then(result => sendResponse(result))
+      .catch(err => sendResponse({ success: false, error: err.message }));
+    return true;
+  }
 });
+
+// Refresh all providers by finding matching open tabs and scraping them
+async function refreshAllProviders() {
+  const tabs = await browser.tabs.query({});
+  const scrapedProviders = new Set();
+
+  for (const tab of tabs) {
+    if (!tab.url) continue;
+
+    // Check if this tab matches any provider
+    for (const provider of PROVIDERS) {
+      if (scrapedProviders.has(provider.id)) continue;
+
+      const matches = provider.urls.some(url => tab.url.includes(url));
+      if (matches) {
+        try {
+          const result = await browser.tabs.sendMessage(tab.id, { action: 'scrape' });
+          if (result && result.success) {
+            await saveScrapedData(result.provider, result.data);
+            scrapedProviders.add(provider.id);
+          }
+        } catch (e) {
+          // Tab might not have content script loaded
+          console.log(`Could not scrape tab ${tab.id}: ${e.message}`);
+        }
+      }
+    }
+  }
+
+  return { scrapedCount: scrapedProviders.size };
+}
+
+// Scrape a specific tab
+async function scrapeTab(tabId) {
+  try {
+    const result = await browser.tabs.sendMessage(tabId, { action: 'scrape' });
+    if (result && result.success) {
+      await saveScrapedData(result.provider, result.data);
+    }
+    return result;
+  } catch (e) {
+    return { success: false, error: e.message };
+  }
+}
 
 // Storage helpers
 const STORAGE_KEY = 'api_usage_data';

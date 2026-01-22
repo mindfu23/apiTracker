@@ -1,18 +1,13 @@
 {
   "manifest_version": 2,
   "name": "API Usage Scraper",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Scrapes usage data from AI provider dashboards for API Tracker",
   "permissions": [
     "activeTab",
     "storage",
     "tabs",
-    "*://console.anthropic.com/*",
-    "*://platform.openai.com/*",
-    "*://github.com/*",
-    "*://console.cloud.google.com/*",
-    "*://www.perplexity.ai/*",
-    "*://claude.ai/*"
+    "<all_urls>"
   ],
   "browser_action": {
     "default_popup": "popup.html",
@@ -23,6 +18,11 @@
     }
   },
   "content_scripts": [
+    {
+      "matches": ["*://platform.claude.com/*"],
+      "js": ["scrapers/anthropic.js"],
+      "run_at": "document_idle"
+    },
     {
       "matches": ["*://console.anthropic.com/*"],
       "js": ["scrapers/anthropic.js"],
@@ -49,8 +49,18 @@
       "run_at": "document_idle"
     },
     {
-      "matches": ["*://www.perplexity.ai/settings/*"],
+      "matches": ["*://www.perplexity.ai/*"],
       "js": ["scrapers/perplexity.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["*://perplexity.ai/*"],
+      "js": ["scrapers/perplexity.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["<all_urls>"],
+      "js": ["scrapers/generic-scraper.js"],
       "run_at": "document_idle"
     }
   ],

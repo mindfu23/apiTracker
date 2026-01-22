@@ -147,10 +147,117 @@
       0%, 100% { opacity: 1; }
       50% { opacity: 0.5; }
     }
+    /* Page Detection Styles */
+    .detection-section {
+      padding: 10px;
+      border-radius: 8px;
+      margin-bottom: 12px;
+    }
+    .detected-known {
+      background: #ecfdf5;
+      border: 1px solid #10b981;
+    }
+    .detected-potential {
+      background: #fef3c7;
+      border: 1px solid #f59e0b;
+    }
+    .detected-provider {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .detected-hint {
+      font-size: 11px;
+      color: #6b7280;
+      margin-top: 2px;
+    }
+    .detected-potential-page {
+      font-size: 12px;
+    }
+    .mini-btn {
+      padding: 4px 8px;
+      font-size: 11px;
+      border: 1px solid #d1d5db;
+      border-radius: 4px;
+      background: white;
+      cursor: pointer;
+      margin-top: 6px;
+    }
+    .mini-btn:hover {
+      background: #f3f4f6;
+    }
+    .mini-btn.danger {
+      color: #ef4444;
+      border-color: #fecaca;
+      padding: 2px 6px;
+      font-weight: bold;
+    }
+    .mini-btn.danger:hover {
+      background: #fef2f2;
+    }
+    /* Custom Pages Styles */
+    .custom-pages-section {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid #e5e7eb;
+    }
+    .custom-page-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 6px 8px;
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 6px;
+      margin-bottom: 4px;
+    }
+    .custom-page-name {
+      font-size: 12px;
+      font-weight: 500;
+    }
+    .custom-page-url {
+      font-size: 10px;
+      color: #6b7280;
+    }
+    .no-custom-pages {
+      font-size: 11px;
+      color: #9ca3af;
+      text-align: center;
+      padding: 8px;
+    }
+    .collapsible-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      cursor: pointer;
+    }
+    .collapsible-header:hover {
+      color: #3b82f6;
+    }
+    .toggle-icon {
+      font-size: 10px;
+      transition: transform 0.2s;
+    }
+    .collapsed .toggle-icon {
+      transform: rotate(-90deg);
+    }
+    .collapsible-content {
+      max-height: 200px;
+      overflow: hidden;
+      transition: max-height 0.2s;
+    }
+    .collapsed .collapsible-content {
+      max-height: 0;
+    }
   </style>
 </head>
 <body>
   <h1>API Usage Scraper</h1>
+
+  <!-- Page Detection Section -->
+  <div class="detection-section" id="pageDetection" style="display: none;">
+    <div id="detectedInfo"></div>
+  </div>
 
   <div class="provider-list" id="providerList">
     <!-- Providers will be populated by JS -->
@@ -169,6 +276,21 @@
 
   <div class="data-preview" id="dataPreview" style="display: none;">
     <!-- Data preview will be shown here -->
+  </div>
+
+  <!-- Custom Pages Section -->
+  <div class="custom-pages-section">
+    <div class="section-title collapsible-header" id="customPagesToggle">
+      Custom Pages <span class="toggle-icon">▼</span>
+    </div>
+    <div class="collapsible-content" id="customPagesContent">
+      <div id="customPagesList">
+        <!-- Custom pages will be populated by JS -->
+      </div>
+      <button class="mini-btn" id="addCustomPageManual" style="width: 100%; margin-top: 6px;">
+        + Add current page
+      </button>
+    </div>
   </div>
 
   <script src="popup.js"></script>

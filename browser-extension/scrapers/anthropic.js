@@ -1,6 +1,11 @@
 /**
- * Anthropic Console Scraper
- * Scrapes usage data from console.anthropic.com/settings/usage
+ * Anthropic API Console Scraper
+ * Scrapes usage data from platform.claude.com/usage (or legacy console.anthropic.com)
+ *
+ * Based on the user's screenshot, this shows:
+ * - "API credits remaining: $X.XX"
+ * - Total spending breakdown
+ * - Usage by model
  */
 
 (function() {
@@ -21,7 +26,7 @@
 
   function scrapeAnthropicUsage() {
     const data = {
-      provider: 'Anthropic',
+      provider: 'Anthropic API',
       scrapedAt: new Date().toISOString(),
       pageUrl: window.location.href
     };
@@ -123,6 +128,93 @@
     if (limitMatch && !data.monthlyLimit) {
       data.monthlyLimit = parseFloat(limitMatch[1].replace(',', ''));
     }
+
+    // New patterns for platform.claude.com/usage
+    // Pattern: "API credits remaining: $X.XX"
+    const creditsRemainingMatch = pageText.match(/API\s+credits?\s+remaining[:\s]*\$?([\d,.]+)/i);
+    if (creditsRemainingMatch) {
+      data.creditBalance = parseFloat(creditsRemainingMatch[1].replace(',', ''));
+    }
+
+    // Pattern: "credits remaining" without "API"
+    const altCreditsMatch = pageText.match(/\$?([\d,.]+)\s+(?:credits?)?\s*remaining/i);
+    if (altCreditsMatch && !data.creditBalance) {
+      data.creditBalance = parseFloat(altCreditsMatch[1].replace(',', ''));
+    }
+
+    // Pattern: Total usage/spending
+    const totalUsageMatch = pageText.match(/Total\s+(?:usage|spending|cost)[:\s]*\$?([\d,.]+)/i);
+    if (totalUsageMatch) {
+      data.totalSpending = parseFloat(totalUsageMatch[1].replace(',', ''));
+    }
+
+    // Pattern: "This month: $X.XX"
+    const thisMonthMatch = pageText.match(/This\s+month[:\s]*\$?([\d,.]+)/i);
+    if (thisMonthMatch) {
+      data.thisMonthSpend = parseFloat(thisMonthMatch[1].replace(',', ''));
+    }
+
+    // Pattern: Usage tier
+    const tierMatch = pageText.match(/(?:Usage\s+)?[Tt]ier[:\s]*(\d+)/i);
+    if (tierMatch) {
+      data.usageTier = parseInt(tierMatch[1]);
+    }
+
+    // Pattern: Rate limit info
+    const rateLimitMatch = pageText.match(/Rate\s+limit[:\s]*([\d,]+)\s*(?:requests?|RPM)/i);
+    if (rateLimitMatch) {
+      data.rateLimit = parseInt(rateLimitMatch[1].replace(',', ''));
+    }
+
+    // Pattern: Model-specific usage
+    // Look for Claude model names followed by amounts
+    const modelPatterns = [
+      /claude[- ]?3[- ]?5?[- ]?(?:opus|sonnet|haiku)[:\s]*\$?([\d,.]+)/gi,
+      /claude[- ]?(?:opus|sonnet|haiku)[- ]?[\d.]*[:\s]*\$?([\d,.]+)/gi
+    ];
+
+    data.modelUsage = {};
+    modelPatterns.forEach(pattern => {
+      let match;
+      while ((match = pattern.exec(pageText)) !== null) {
+        const modelName = match[0].split(/[:\s]/)[0].trim();
+        const amount = parseFloat(match[1].replace(',', ''));
+        if (!isNaN(amount)) {
+          data.modelUsage[modelName] = amount;
+        }
+      }
+    });
+
+    // Clean up empty modelUsage
+    if (Object.keys(data.modelUsage).length === 0) {
+      delete data.modelUsage;
+    }
+
+    // Look for usage tables
+    const tables = document.querySelectorAll('table');
+    tables.forEach(table => {
+      const headerRow = table.querySelector('tr');
+      if (headerRow) {
+        const headerText = headerRow.textContent.toLowerCase();
+        if (headerText.includes('model') || headerText.includes('cost') || headerText.includes('usage')) {
+          const rows = table.querySelectorAll('tr');
+          const usageData = [];
+          rows.forEach((row, idx) => {
+            if (idx === 0) return; // Skip header
+            const cells = row.querySelectorAll('td');
+            if (cells.length >= 2) {
+              usageData.push({
+                model: cells[0]?.textContent?.trim(),
+                value: cells[1]?.textContent?.trim()
+              });
+            }
+          });
+          if (usageData.length > 0) {
+            data.usageBreakdown = usageData;
+          }
+        }
+      }
+    });
 
     return data;
   }

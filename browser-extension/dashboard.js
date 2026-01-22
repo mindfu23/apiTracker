@@ -1,27 +1,81 @@
 /**
  * API Usage Dashboard - Main Script
  * Displays collected scraping data in a dashboard view
+ *
+ * Features:
+ * - Auto-refresh: Triggers background scrape when dashboard opens
+ * - Bookmarkable: Can be bookmarked and will refresh data on each visit
+ * - Real-time updates: Listens for storage changes
  */
 
 const STORAGE_KEY = 'api_usage_data';
+const LAST_REFRESH_KEY = 'last_dashboard_refresh';
+const REFRESH_COOLDOWN_MS = 30000; // 30 seconds cooldown between auto-refreshes
 
 const PROVIDER_CONFIG = {
-  'anthropic': { name: 'Anthropic', color: '#f97316', abbrev: 'ANT' },
-  'openai': { name: 'OpenAI', color: '#10b981', abbrev: 'OAI' },
-  'claude-ai': { name: 'Claude.ai', color: '#f97316', abbrev: 'CLD' },
-  'github-copilot': { name: 'GitHub Copilot', color: '#1f2937', abbrev: 'GH' },
-  'google-cloud': { name: 'Google Cloud', color: '#3b82f6', abbrev: 'GCP' },
-  'perplexity': { name: 'Perplexity', color: '#06b6d4', abbrev: 'PPX' }
+  'anthropic': { name: 'Anthropic', color: '#f97316', abbrev: 'ANT', dashboardUrl: 'https://platform.claude.com/usage' },
+  'openai': { name: 'OpenAI', color: '#10b981', abbrev: 'OAI', dashboardUrl: 'https://platform.openai.com/usage' },
+  'claude-ai': { name: 'Claude.ai', color: '#f97316', abbrev: 'CLD', dashboardUrl: 'https://claude.ai/settings/usage' },
+  'github-copilot': { name: 'GitHub Copilot', color: '#1f2937', abbrev: 'GH', dashboardUrl: 'https://github.com/settings/billing/premium_requests_usage' },
+  'google-cloud': { name: 'Google Cloud', color: '#3b82f6', abbrev: 'GCP', dashboardUrl: 'https://console.cloud.google.com/billing' },
+  'perplexity': { name: 'Perplexity', color: '#06b6d4', abbrev: 'PPX', dashboardUrl: 'https://www.perplexity.ai/account/api/billing' }
 };
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   loadAndRender();
   setupEventListeners();
+
+  // Auto-refresh on page load (with cooldown to prevent excessive requests)
+  await autoRefreshIfNeeded();
+
+  // Listen for storage changes to update in real-time
+  browser.storage.onChanged.addListener((changes, areaName) => {
+    if (areaName === 'local' && changes[STORAGE_KEY]) {
+      loadAndRender();
+    }
+  });
 });
+
+// Auto-refresh data when dashboard opens (if cooldown has passed)
+async function autoRefreshIfNeeded() {
+  const result = await browser.storage.local.get(LAST_REFRESH_KEY);
+  const lastRefresh = result[LAST_REFRESH_KEY] || 0;
+  const now = Date.now();
+
+  if (now - lastRefresh > REFRESH_COOLDOWN_MS) {
+    await browser.storage.local.set({ [LAST_REFRESH_KEY]: now });
+    showRefreshStatus('Auto-refreshing data...');
+
+    // Trigger background refresh
+    try {
+      await browser.runtime.sendMessage({ action: 'refreshAll' });
+    } catch (e) {
+      // Background script might not support this yet, that's OK
+      console.log('Background refresh not available');
+    }
+  }
+}
+
+function showRefreshStatus(message) {
+  let statusEl = document.getElementById('refreshStatus');
+  if (!statusEl) {
+    statusEl = document.createElement('div');
+    statusEl.id = 'refreshStatus';
+    statusEl.style.cssText = 'position: fixed; top: 10px; right: 10px; background: #3b82f6; color: white; padding: 8px 16px; border-radius: 8px; font-size: 13px; z-index: 1000; transition: opacity 0.3s;';
+    document.body.appendChild(statusEl);
+  }
+  statusEl.textContent = message;
+  statusEl.style.opacity = '1';
+
+  setTimeout(() => {
+    statusEl.style.opacity = '0';
+  }, 3000);
+}
 
 async function loadAndRender() {
   const data = await getStoredData();
   renderProviders(data);
+  setupToggleListeners(data);
 }
 
 async function getStoredData() {
@@ -73,12 +127,10 @@ function renderProviders(data) {
             ${stats.map(stat => renderStat(stat)).join('')}
           </div>
           ${renderProgressBar(providerData)}
-          <div class="toggle-raw" onclick="toggleRawData('${providerId}')">
+          <div class="toggle-raw" data-toggle="${providerId}">
             Show raw data
           </div>
-          <div class="raw-data" id="raw-${providerId}" style="display: none;">
-            ${JSON.stringify(providerData, null, 2)}
-          </div>
+          <div class="raw-data" id="raw-${providerId}" style="display: none;"></div>
         </div>
       </div>
     `;
@@ -145,12 +197,24 @@ function extractStats(providerId, data) {
     stats.push({ label: 'Included Used', value: Math.round(data.includedUsed).toLocaleString() });
   }
 
-  // Requests/tokens
+  // Requests/tokens/API calls
   if (data.totalRequests !== undefined) {
     stats.push({ label: 'Total Requests', value: data.totalRequests.toLocaleString() });
   }
   if (data.totalTokens !== undefined) {
     stats.push({ label: 'Total Tokens', value: data.totalTokens.toLocaleString() });
+  }
+  if (data.chatCompletionsRequests !== undefined) {
+    stats.push({ label: 'Chat Requests', value: data.chatCompletionsRequests.toLocaleString() });
+  }
+  if (data.imagesRequests !== undefined) {
+    stats.push({ label: 'Image Requests', value: data.imagesRequests.toLocaleString() });
+  }
+  if (data.embeddingsRequests !== undefined) {
+    stats.push({ label: 'Embeddings', value: data.embeddingsRequests.toLocaleString() });
+  }
+  if (data.apiRequestsSection !== undefined && data.totalRequests === undefined) {
+    stats.push({ label: 'API Requests', value: 'Available' });
   }
 
   // Reset info
@@ -167,6 +231,76 @@ function extractStats(providerId, data) {
   // Credits
   if (data.creditsRemaining !== undefined) {
     stats.push({ label: 'Credits Left', value: `$${data.creditsRemaining.toFixed(2)}`, type: 'money' });
+  }
+
+  // Google Cloud specific
+  if (data.creditsUsed !== undefined && data.creditsTotal !== undefined) {
+    stats.push({ label: 'Credits Used', value: `$${data.creditsUsed} / $${data.creditsTotal}` });
+  }
+  if (data.geminiSpend !== undefined) {
+    stats.push({ label: 'Gemini Spend', value: `$${data.geminiSpend.toFixed(2)}`, type: 'money' });
+  }
+  if (data.expirationDate) {
+    stats.push({ label: 'Expires', value: data.expirationDate });
+  }
+
+  // Anthropic specific
+  if (data.totalSpending !== undefined) {
+    stats.push({ label: 'Total Spending', value: `$${data.totalSpending.toFixed(2)}`, type: 'money' });
+  }
+  if (data.thisMonthSpend !== undefined) {
+    stats.push({ label: 'This Month', value: `$${data.thisMonthSpend.toFixed(2)}`, type: 'money' });
+  }
+  if (data.usageTier !== undefined) {
+    stats.push({ label: 'Usage Tier', value: `Tier ${data.usageTier}` });
+  }
+  if (data.rateLimit !== undefined) {
+    stats.push({ label: 'Rate Limit', value: `${data.rateLimit.toLocaleString()} RPM` });
+  }
+  if (data.modelUsage && Object.keys(data.modelUsage).length > 0) {
+    const models = Object.entries(data.modelUsage)
+      .map(([model, cost]) => `${model}: $${cost}`)
+      .join(', ');
+    stats.push({ label: 'Model Usage', value: models });
+  }
+
+  // Perplexity specific
+  if (data.monthlyCredit !== undefined) {
+    stats.push({ label: 'Monthly Credit', value: `$${data.monthlyCredit}`, type: 'money' });
+  }
+  if (data.autoReload) {
+    stats.push({ label: 'Auto Reload', value: data.autoReload });
+  }
+  if (data.subscriptionType) {
+    stats.push({ label: 'Subscription', value: data.subscriptionType });
+  }
+  if (data.sonarRequests !== undefined || data.sonarProRequests !== undefined) {
+    const sonar = data.sonarRequests || 0;
+    const sonarPro = data.sonarProRequests || 0;
+    stats.push({ label: 'Requests', value: `Sonar: ${sonar}, Pro: ${sonarPro}` });
+  }
+
+  // Generic fields from generic scraper
+  if (data.balance !== undefined) {
+    stats.push({ label: 'Balance', value: `$${data.balance.toFixed(2)}`, type: 'money' });
+  }
+  if (data.spend !== undefined) {
+    stats.push({ label: 'Spend', value: `$${data.spend.toFixed(2)}`, type: 'money' });
+  }
+  if (data.credits !== undefined) {
+    stats.push({ label: 'Credits', value: `$${data.credits.toFixed(2)}`, type: 'money' });
+  }
+  if (data.budget !== undefined && !data.budgetLimit) {
+    stats.push({ label: 'Budget', value: `$${data.budget}` });
+  }
+  if (data.requests !== undefined && !data.totalRequests) {
+    stats.push({ label: 'Requests', value: data.requests.toLocaleString() });
+  }
+  if (data.tokens !== undefined && !data.totalTokens) {
+    stats.push({ label: 'Tokens', value: data.tokens.toLocaleString() });
+  }
+  if (data.plan) {
+    stats.push({ label: 'Plan', value: data.plan });
   }
 
   return stats.slice(0, 6); // Limit to 6 stats for grid layout
@@ -207,17 +341,26 @@ function renderProgressBar(data) {
   `;
 }
 
-function toggleRawData(providerId) {
-  const el = document.getElementById(`raw-${providerId}`);
-  if (el.style.display === 'none') {
-    el.style.display = 'block';
-  } else {
-    el.style.display = 'none';
-  }
-}
+function setupToggleListeners(data) {
+  document.querySelectorAll('.toggle-raw[data-toggle]').forEach(toggleEl => {
+    toggleEl.addEventListener('click', () => {
+      const providerId = toggleEl.dataset.toggle;
+      const rawEl = document.getElementById(`raw-${providerId}`);
 
-// Make toggleRawData available globally
-window.toggleRawData = toggleRawData;
+      if (rawEl.style.display === 'none' || rawEl.style.display === '') {
+        // Populate and show
+        const providerData = data[providerId];
+        rawEl.textContent = JSON.stringify(providerData, null, 2);
+        rawEl.style.display = 'block';
+        toggleEl.textContent = 'Hide raw data';
+      } else {
+        // Hide
+        rawEl.style.display = 'none';
+        toggleEl.textContent = 'Show raw data';
+      }
+    });
+  });
+}
 
 function setupEventListeners() {
   document.getElementById('refreshBtn').addEventListener('click', loadAndRender);
