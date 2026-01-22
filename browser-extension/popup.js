@@ -318,7 +318,10 @@ function setupEventListeners() {
     browser.tabs.create({ url: browser.runtime.getURL('dashboard.html') });
   });
 
-  // Export to API Tracker
+  // TODO: Future feature - Export to API Tracker
+  // Currently disabled. Could be developed to sync with main API Tracker app
+  // via shared storage, POST to API endpoint, or file import mechanism.
+  /*
   document.getElementById('exportBtn').addEventListener('click', async () => {
     const btn = document.getElementById('exportBtn');
     const data = await getStoredData();
@@ -344,6 +347,7 @@ function setupEventListeners() {
       btn.textContent = 'Export to API Tracker';
     }, 2000);
   });
+  */
 }
 
 async function openProviderDashboard(provider) {
