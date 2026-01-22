@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>API Usage Scraper</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      width: 320px;
+      padding: 16px;
+      background: #f9fafb;
+    }
+    h1 {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 12px;
+      color: #111827;
+    }
+    .provider-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .provider-btn {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      background: white;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .provider-btn:hover {
+      border-color: #3b82f6;
+      background: #eff6ff;
+    }
+    .provider-btn.has-data {
+      border-color: #10b981;
+      background: #ecfdf5;
+    }
+    .provider-icon {
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-weight: bold;
+      color: white;
+    }
+    .provider-info {
+      flex: 1;
+      text-align: left;
+    }
+    .provider-name {
+      font-size: 13px;
+      font-weight: 500;
+      color: #374151;
+    }
+    .provider-status {
+      font-size: 11px;
+      color: #6b7280;
+    }
+    .provider-status.success {
+      color: #059669;
+    }
+    .scrape-indicator {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #d1d5db;
+    }
+    .scrape-indicator.active {
+      background: #10b981;
+    }
+    .section-title {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #6b7280;
+      margin: 16px 0 8px;
+    }
+    .action-btn {
+      width: 100%;
+      padding: 10px;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .action-btn.primary {
+      background: #3b82f6;
+      color: white;
+    }
+    .action-btn.primary:hover {
+      background: #2563eb;
+    }
+    .action-btn.secondary {
+      background: #e5e7eb;
+      color: #374151;
+      margin-top: 8px;
+    }
+    .action-btn.secondary:hover {
+      background: #d1d5db;
+    }
+    .data-preview {
+      margin-top: 12px;
+      padding: 10px;
+      background: white;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      font-size: 11px;
+      max-height: 150px;
+      overflow-y: auto;
+    }
+    .data-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 4px 0;
+      border-bottom: 1px solid #f3f4f6;
+    }
+    .data-row:last-child {
+      border-bottom: none;
+    }
+    .data-label {
+      color: #6b7280;
+    }
+    .data-value {
+      font-weight: 500;
+      color: #111827;
+    }
+    .loading {
+      animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+  </style>
+</head>
+<body>
+  <h1>API Usage Scraper</h1>
+
+  <div class="provider-list" id="providerList">
+    <!-- Providers will be populated by JS -->
+  </div>
+
+  <div class="section-title">Actions</div>
+  <button class="action-btn primary" id="scrapeCurrentBtn">
+    Scrape Current Page
+  </button>
+  <button class="action-btn secondary" id="viewDashboardBtn">
+    View Collected Data
+  </button>
+  <button class="action-btn secondary" id="exportBtn">
+    Export to API Tracker
+  </button>
+
+  <div class="data-preview" id="dataPreview" style="display: none;">
+    <!-- Data preview will be shown here -->
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
