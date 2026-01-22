@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>API Usage Dashboard</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f3f4f6;
+      min-height: 100vh;
+      padding: 24px;
+    }
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+    }
+    h1 {
+      font-size: 24px;
+      font-weight: 600;
+      color: #111827;
+    }
+    .subtitle {
+      color: #6b7280;
+      font-size: 14px;
+      margin-top: 4px;
+    }
+    .actions {
+      display: flex;
+      gap: 12px;
+    }
+    .btn {
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      cursor: pointer;
+      border: none;
+      transition: all 0.15s;
+    }
+    .btn-primary {
+      background: #3b82f6;
+      color: white;
+    }
+    .btn-primary:hover {
+      background: #2563eb;
+    }
+    .btn-secondary {
+      background: white;
+      color: #374151;
+      border: 1px solid #d1d5db;
+    }
+    .btn-secondary:hover {
+      background: #f9fafb;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+      gap: 20px;
+    }
+    .card {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      overflow: hidden;
+    }
+    .card-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 16px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    .provider-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: bold;
+      color: white;
+    }
+    .provider-name {
+      font-size: 16px;
+      font-weight: 600;
+      color: #111827;
+    }
+    .last-updated {
+      font-size: 12px;
+      color: #6b7280;
+    }
+    .card-body {
+      padding: 16px;
+    }
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+    }
+    .stat {
+      padding: 12px;
+      background: #f9fafb;
+      border-radius: 8px;
+    }
+    .stat-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #6b7280;
+      margin-bottom: 4px;
+    }
+    .stat-value {
+      font-size: 18px;
+      font-weight: 600;
+      color: #111827;
+    }
+    .stat-value.money {
+      color: #059669;
+    }
+    .stat-value.percent {
+      color: #3b82f6;
+    }
+    .stat-value.warning {
+      color: #f59e0b;
+    }
+    .stat-value.danger {
+      color: #ef4444;
+    }
+    .progress-bar {
+      height: 8px;
+      background: #e5e7eb;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+    .progress-fill {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.3s;
+    }
+    .progress-fill.low {
+      background: #10b981;
+    }
+    .progress-fill.medium {
+      background: #f59e0b;
+    }
+    .progress-fill.high {
+      background: #ef4444;
+    }
+    .empty-state {
+      text-align: center;
+      padding: 48px;
+      color: #6b7280;
+    }
+    .empty-state h2 {
+      font-size: 18px;
+      margin-bottom: 8px;
+      color: #374151;
+    }
+    .raw-data {
+      margin-top: 12px;
+      padding: 12px;
+      background: #f9fafb;
+      border-radius: 8px;
+      font-family: monospace;
+      font-size: 11px;
+      max-height: 200px;
+      overflow: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+    }
+    .toggle-raw {
+      font-size: 12px;
+      color: #3b82f6;
+      cursor: pointer;
+      margin-top: 8px;
+    }
+    .toggle-raw:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div>
+        <h1>API Usage Dashboard</h1>
+        <p class="subtitle">Scraped data from your provider dashboards</p>
+      </div>
+      <div class="actions">
+        <button class="btn btn-secondary" id="refreshBtn">Refresh</button>
+        <button class="btn btn-secondary" id="exportBtn">Export JSON</button>
+        <button class="btn btn-primary" id="clearBtn">Clear All Data</button>
+      </div>
+    </header>
+
+    <div class="grid" id="providerGrid">
+      <!-- Provider cards will be populated here -->
+    </div>
+
+    <div class="empty-state" id="emptyState" style="display: none;">
+      <h2>No data collected yet</h2>
+      <p>Visit your provider dashboards and click the extension popup to scrape usage data.</p>
+    </div>
+  </div>
+
+  <script src="dashboard.js"></script>
+</body>
+</html>

@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <title>API Tracker</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    :root {
+      --safe-area-inset-top: env(safe-area-inset-top);
+      --safe-area-inset-bottom: env(safe-area-inset-bottom);
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f9fafb;
+      min-height: 100vh;
+      padding-top: var(--safe-area-inset-top);
+      padding-bottom: var(--safe-area-inset-bottom);
+    }
+    .app-header {
+      background: white;
+      padding: 16px;
+      border-bottom: 1px solid #e5e7eb;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .app-header h1 {
+      font-size: 20px;
+      font-weight: 600;
+      color: #111827;
+    }
+    .app-content {
+      padding: 16px;
+    }
+    .provider-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .provider-card {
+      background: white;
+      border-radius: 12px;
+      padding: 16px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s;
+    }
+    .provider-card:active {
+      transform: scale(0.98);
+    }
+    .provider-card.has-data {
+      border-left: 4px solid #10b981;
+    }
+    .provider-card.scraping {
+      opacity: 0.7;
+    }
+    .provider-icon {
+      width: 40px;
+      height: 40px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 14px;
+      font-weight: bold;
+      color: white;
+      flex-shrink: 0;
+    }
+    .provider-info {
+      flex: 1;
+    }
+    .provider-name {
+      font-size: 16px;
+      font-weight: 500;
+      color: #111827;
+    }
+    .provider-status {
+      font-size: 13px;
+      color: #6b7280;
+      margin-top: 2px;
+    }
+    .provider-status.success {
+      color: #059669;
+    }
+    .provider-status.error {
+      color: #dc2626;
+    }
+    .provider-stats {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid #f3f4f6;
+    }
+    .stat-item {
+      text-align: center;
+    }
+    .stat-value {
+      font-size: 18px;
+      font-weight: 600;
+      color: #111827;
+    }
+    .stat-label {
+      font-size: 11px;
+      color: #6b7280;
+      text-transform: uppercase;
+    }
+    .scrape-result {
+      font-size: 12px;
+      padding: 4px 8px;
+      border-radius: 6px;
+      display: inline-block;
+      margin-top: 8px;
+    }
+    .scrape-success {
+      background: #d1fae5;
+      color: #047857;
+    }
+    .scrape-error {
+      background: #fef3c7;
+      color: #b45309;
+    }
+    .scrape-loading {
+      background: #e0e7ff;
+      color: #4338ca;
+    }
+    .chevron {
+      color: #9ca3af;
+      font-size: 20px;
+    }
+    .section-title {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #6b7280;
+      margin: 24px 0 12px;
+    }
+    .action-button {
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 10px;
+      font-size: 15px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .action-button.primary {
+      background: #3b82f6;
+      color: white;
+    }
+    .action-button.primary:active {
+      background: #2563eb;
+    }
+    .action-button.secondary {
+      background: #e5e7eb;
+      color: #374151;
+      margin-top: 8px;
+    }
+    .empty-state {
+      text-align: center;
+      padding: 40px 20px;
+      color: #6b7280;
+    }
+    .empty-state-icon {
+      font-size: 48px;
+      margin-bottom: 16px;
+    }
+    /* Loading spinner */
+    .spinner {
+      width: 20px;
+      height: 20px;
+      border: 2px solid #e5e7eb;
+      border-top-color: #3b82f6;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    /* WebView modal */
+    .webview-modal {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: white;
+      z-index: 1000;
+      display: none;
+    }
+    .webview-modal.active {
+      display: flex;
+      flex-direction: column;
+    }
+    .webview-header {
+      display: flex;
+      align-items: center;
+      padding: 12px 16px;
+      padding-top: calc(12px + var(--safe-area-inset-top));
+      background: #f9fafb;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    .webview-close {
+      padding: 8px 16px;
+      background: #e5e7eb;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .webview-title {
+      flex: 1;
+      text-align: center;
+      font-weight: 500;
+    }
+    .webview-scrape {
+      padding: 8px 16px;
+      background: #3b82f6;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    .webview-container {
+      flex: 1;
+      position: relative;
+    }
+    .webview-container iframe {
+      width: 100%;
+      height: 100%;
+      border: none;
+    }
+    .webview-loading {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+    }
+  </style>
+</head>
+<body>
+  <header class="app-header">
+    <h1>API Tracker</h1>
+  </header>
+
+  <main class="app-content">
+    <div class="provider-list" id="providerList">
+      <!-- Providers will be populated by JS -->
+    </div>
+
+    <div class="section-title">Actions</div>
+    <button class="action-button secondary" id="refreshAllBtn">
+      Refresh All Data
+    </button>
+    <button class="action-button secondary" id="clearDataBtn">
+      Clear All Data
+    </button>
+  </main>
+
+  <!-- WebView Modal for in-app browsing -->
+  <div class="webview-modal" id="webviewModal">
+    <div class="webview-header">
+      <button class="webview-close" id="webviewClose">Done</button>
+      <span class="webview-title" id="webviewTitle">Loading...</span>
+      <button class="webview-scrape" id="webviewScrape">Scrape</button>
+    </div>
+    <div class="webview-container" id="webviewContainer">
+      <div class="webview-loading">
+        <div class="spinner"></div>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>

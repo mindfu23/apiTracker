@@ -1,9 +1,9 @@
 /**
- * API Usage Scraper - Background Script
+ * API Usage Scraper - Chrome Background Service Worker (Manifest v3)
  * Handles message passing, storage management, and background scraping
  */
 
-// Provider configurations for background scraping
+// Provider configurations
 const PROVIDERS = [
   { id: 'anthropic', urls: ['platform.claude.com', 'console.anthropic.com'], dashboardUrl: 'https://platform.claude.com/usage' },
   { id: 'openai', urls: ['platform.openai.com'], dashboardUrl: 'https://platform.openai.com/usage' },
@@ -13,13 +13,16 @@ const PROVIDERS = [
   { id: 'perplexity', urls: ['perplexity.ai/account', 'perplexity.ai/settings'], dashboardUrl: 'https://www.perplexity.ai/account/api/billing' }
 ];
 
-// Listen for messages from content scripts and popup/dashboard
-browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
+// Storage key
+const STORAGE_KEY = 'api_usage_data';
+
+// Listen for messages from content scripts and popup
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.action === 'saveData') {
     saveScrapedData(message.provider, message.data)
       .then(() => sendResponse({ success: true }))
       .catch(err => sendResponse({ success: false, error: err.message }));
-    return true; // Keep channel open for async response
+    return true;
   }
 
   if (message.action === 'getData') {
@@ -29,7 +32,6 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
-  // Refresh all providers by scraping any open tabs that match
   if (message.action === 'refreshAll') {
     refreshAllProviders()
       .then(() => sendResponse({ success: true }))
@@ -37,7 +39,6 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
-  // Scrape a specific tab
   if (message.action === 'scrapeTab') {
     scrapeTab(message.tabId)
       .then(result => sendResponse(result))
@@ -45,7 +46,6 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
-  // Scrape a tab once it finishes loading
   if (message.action === 'scrapeTabWhenReady') {
     scrapeTabWhenReady(message.tabId, message.providerId)
       .then(result => sendResponse(result))
@@ -54,28 +54,26 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 });
 
-// Refresh all providers by finding matching open tabs and scraping them
+// Refresh all providers by finding matching open tabs
 async function refreshAllProviders() {
-  const tabs = await browser.tabs.query({});
+  const tabs = await chrome.tabs.query({});
   const scrapedProviders = new Set();
 
   for (const tab of tabs) {
     if (!tab.url) continue;
 
-    // Check if this tab matches any provider
     for (const provider of PROVIDERS) {
       if (scrapedProviders.has(provider.id)) continue;
 
       const matches = provider.urls.some(url => tab.url.includes(url));
       if (matches) {
         try {
-          const result = await browser.tabs.sendMessage(tab.id, { action: 'scrape' });
+          const result = await chrome.tabs.sendMessage(tab.id, { action: 'scrape' });
           if (result && result.success) {
             await saveScrapedData(result.provider, result.data);
             scrapedProviders.add(provider.id);
           }
         } catch (e) {
-          // Tab might not have content script loaded
           console.log(`Could not scrape tab ${tab.id}: ${e.message}`);
         }
       }
@@ -88,7 +86,7 @@ async function refreshAllProviders() {
 // Scrape a specific tab
 async function scrapeTab(tabId) {
   try {
-    const result = await browser.tabs.sendMessage(tabId, { action: 'scrape' });
+    const result = await chrome.tabs.sendMessage(tabId, { action: 'scrape' });
     if (result && result.success) {
       await saveScrapedData(result.provider, result.data);
     }
@@ -98,19 +96,17 @@ async function scrapeTab(tabId) {
   }
 }
 
-// Scrape a tab once it finishes loading (used when opening a new provider page)
+// Scrape a tab once it finishes loading
 async function scrapeTabWhenReady(tabId, providerId) {
   return new Promise((resolve) => {
-    // Listen for tab updates
     const listener = async (updatedTabId, changeInfo, tab) => {
       if (updatedTabId === tabId && changeInfo.status === 'complete') {
-        // Remove the listener
-        browser.tabs.onUpdated.removeListener(listener);
+        chrome.tabs.onUpdated.removeListener(listener);
 
-        // Wait a bit for content script to initialize and page to render
+        // Wait for content script to initialize
         setTimeout(async () => {
           try {
-            const result = await browser.tabs.sendMessage(tabId, { action: 'scrape' });
+            const result = await chrome.tabs.sendMessage(tabId, { action: 'scrape' });
             if (result && result.success) {
               await saveScrapedData(result.provider || providerId, result.data);
               resolve({ success: true });
@@ -121,25 +117,23 @@ async function scrapeTabWhenReady(tabId, providerId) {
             console.log(`Auto-scrape failed for tab ${tabId}: ${e.message}`);
             resolve({ success: false, error: e.message });
           }
-        }, 1500); // Wait 1.5s for dynamic content to load
+        }, 1500);
       }
     };
 
-    browser.tabs.onUpdated.addListener(listener);
+    chrome.tabs.onUpdated.addListener(listener);
 
-    // Timeout after 30 seconds to prevent listener leak
+    // Timeout after 30 seconds
     setTimeout(() => {
-      browser.tabs.onUpdated.removeListener(listener);
+      chrome.tabs.onUpdated.removeListener(listener);
       resolve({ success: false, error: 'Timeout waiting for page load' });
     }, 30000);
   });
 }
 
 // Storage helpers
-const STORAGE_KEY = 'api_usage_data';
-
 async function getStoredData() {
-  const result = await browser.storage.local.get(STORAGE_KEY);
+  const result = await chrome.storage.local.get(STORAGE_KEY);
   return result[STORAGE_KEY] || {};
 }
 
@@ -149,15 +143,15 @@ async function saveScrapedData(providerId, data) {
     ...data,
     lastScraped: new Date().toISOString()
   };
-  await browser.storage.local.set({ [STORAGE_KEY]: existing });
+  await chrome.storage.local.set({ [STORAGE_KEY]: existing });
 }
 
 // Badge update on data change
-browser.storage.onChanged.addListener((changes, area) => {
+chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && changes[STORAGE_KEY]) {
     const data = changes[STORAGE_KEY].newValue || {};
     const count = Object.keys(data).length;
-    browser.browserAction.setBadgeText({ text: count > 0 ? String(count) : '' });
-    browser.browserAction.setBadgeBackgroundColor({ color: '#10b981' });
+    chrome.action.setBadgeText({ text: count > 0 ? String(count) : '' });
+    chrome.action.setBadgeBackgroundColor({ color: '#10b981' });
   }
 });

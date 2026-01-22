@@ -77,7 +77,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 // Auto-scrape if on a known provider page
 async function autoScrapeCurrentPage() {
   try {
-    const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     const currentUrl = tab.url || '';
 
     // Check if on a known provider page
@@ -92,7 +92,7 @@ async function autoScrapeCurrentPage() {
       btn.classList.add('loading');
 
       try {
-        const result = await browser.tabs.sendMessage(tab.id, { action: 'scrape' });
+        const result = await chrome.tabs.sendMessage(tab.id, { action: 'scrape' });
         if (result && result.success) {
           await saveScrapedData(result.provider, result.data);
           showDataPreview(result.data);
@@ -135,7 +135,7 @@ function updateScrapeStatus(providerId, status, errorMessage = null) {
 
 // Detect current page and show relevant info
 async function detectCurrentPage() {
-  const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   const currentUrl = tab.url || '';
   const detectionSection = document.getElementById('pageDetection');
   const detectedInfo = document.getElementById('detectedInfo');
@@ -207,7 +207,7 @@ async function addCurrentAsCustomPage(url) {
   };
 
   customPages.push(newPage);
-  await browser.storage.local.set({ [CUSTOM_PAGES_KEY]: customPages });
+  await chrome.storage.local.set({ [CUSTOM_PAGES_KEY]: customPages });
   await renderCustomPages();
 
   // Update detection section
@@ -222,7 +222,7 @@ async function addCurrentAsCustomPage(url) {
 }
 
 async function getCustomPages() {
-  const result = await browser.storage.local.get(CUSTOM_PAGES_KEY);
+  const result = await chrome.storage.local.get(CUSTOM_PAGES_KEY);
   return result[CUSTOM_PAGES_KEY] || [];
 }
 
@@ -251,7 +251,7 @@ async function renderCustomPages() {
       const id = e.target.dataset.remove;
       const pages = await getCustomPages();
       const filtered = pages.filter(p => p.id !== id);
-      await browser.storage.local.set({ [CUSTOM_PAGES_KEY]: filtered });
+      await chrome.storage.local.set({ [CUSTOM_PAGES_KEY]: filtered });
       await renderCustomPages();
     });
   });
@@ -330,7 +330,7 @@ function setupEventListeners() {
 
   // Manual add custom page button
   document.getElementById('addCustomPageManual').addEventListener('click', async () => {
-    const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
     if (tab.url) {
       await addCurrentAsCustomPage(tab.url);
     }
@@ -344,7 +344,7 @@ function setupEventListeners() {
     btn.disabled = true;
 
     try {
-      const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       const currentUrl = tab.url || '';
 
       // Find which provider this page belongs to (if any)
@@ -370,7 +370,7 @@ function setupEventListeners() {
         await renderProviderList();
       }
 
-      const result = await browser.tabs.sendMessage(tab.id, scrapeMessage);
+      const result = await chrome.tabs.sendMessage(tab.id, scrapeMessage);
 
       if (result && result.success) {
         const providerId = result.provider || (matchedProvider ? matchedProvider.id : 'generic');
@@ -391,7 +391,7 @@ function setupEventListeners() {
       console.error('Scrape error:', error);
       // Try to identify the provider from current URL for error display
       try {
-        const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
         const currentUrl = tab.url || '';
         const matchedProvider = PROVIDERS.find(p =>
           p.urls.some(url => currentUrl.includes(url))
@@ -415,7 +415,7 @@ function setupEventListeners() {
 
   // View dashboard
   document.getElementById('viewDashboardBtn').addEventListener('click', () => {
-    browser.tabs.create({ url: browser.runtime.getURL('dashboard.html') });
+    chrome.tabs.create({ url: chrome.runtime.getURL('dashboard.html') });
   });
 
   // TODO: Future feature - Export to API Tracker
@@ -439,7 +439,7 @@ function setupEventListeners() {
       // Fallback: open in new tab
       const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
-      browser.tabs.create({ url });
+      chrome.tabs.create({ url });
       btn.textContent = 'Opened in new tab';
     }
 
@@ -452,7 +452,7 @@ function setupEventListeners() {
 
 async function openProviderDashboard(provider) {
   // Check if already on the provider's page
-  const [tab] = await browser.tabs.query({ active: true, currentWindow: true });
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   const isOnProvider = provider.urls.some(url => tab.url.includes(url));
 
   if (isOnProvider) {
@@ -464,11 +464,11 @@ async function openProviderDashboard(provider) {
     await renderProviderList();
 
     // Open the dashboard and request auto-scrape after page loads
-    const newTab = await browser.tabs.create({ url: provider.dashboardUrl });
+    const newTab = await chrome.tabs.create({ url: provider.dashboardUrl });
 
     // Send message to background script to scrape this tab once it's ready
     // The background script will wait for the tab to finish loading
-    browser.runtime.sendMessage({
+    chrome.runtime.sendMessage({
       action: 'scrapeTabWhenReady',
       tabId: newTab.id,
       providerId: provider.id
@@ -488,7 +488,7 @@ async function openProviderDashboard(provider) {
 }
 
 async function getStoredData() {
-  const result = await browser.storage.local.get(STORAGE_KEY);
+  const result = await chrome.storage.local.get(STORAGE_KEY);
   return result[STORAGE_KEY] || {};
 }
 
@@ -498,7 +498,7 @@ async function saveScrapedData(providerId, data) {
     ...data,
     lastScraped: new Date().toISOString()
   };
-  await browser.storage.local.set({ [STORAGE_KEY]: existing });
+  await chrome.storage.local.set({ [STORAGE_KEY]: existing });
 }
 
 function showDataPreview(data) {
