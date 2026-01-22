@@ -120,6 +120,7 @@ async function testOpenAI(apiKey) {
 }
 
 // Anthropic - Make a minimal request to check headers
+// Enhanced to extract all rate limit information for comprehensive tracking
 async function testAnthropic(apiKey) {
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -135,36 +136,108 @@ async function testAnthropic(apiKey) {
     })
   });
 
-  // Even if rate limited, we can read headers
-  const rateLimitLimit = res.headers.get('x-ratelimit-limit-requests') || 
-                         res.headers.get('anthropic-ratelimit-requests-limit');
-  const rateLimitRemaining = res.headers.get('x-ratelimit-remaining-requests') ||
-                             res.headers.get('anthropic-ratelimit-requests-remaining');
-  const rateLimitReset = res.headers.get('x-ratelimit-reset-requests') ||
-                         res.headers.get('anthropic-ratelimit-requests-reset');
-
   if (!res.ok && res.status === 401) {
     throw new Error('Invalid API key');
   }
 
-  const limit = rateLimitLimit ? parseInt(rateLimitLimit) : null;
-  const remaining = rateLimitRemaining ? parseInt(rateLimitRemaining) : null;
-  const usage = (limit && remaining !== null) ? limit - remaining : null;
+  // Extract all rate limit headers (Anthropic uses anthropic-ratelimit-* prefix)
+  const headers = {
+    // Request limits
+    requestsLimit: res.headers.get('anthropic-ratelimit-requests-limit'),
+    requestsRemaining: res.headers.get('anthropic-ratelimit-requests-remaining'),
+    requestsReset: res.headers.get('anthropic-ratelimit-requests-reset'),
+    // Token limits (input)
+    inputTokensLimit: res.headers.get('anthropic-ratelimit-input-tokens-limit'),
+    inputTokensRemaining: res.headers.get('anthropic-ratelimit-input-tokens-remaining'),
+    inputTokensReset: res.headers.get('anthropic-ratelimit-input-tokens-reset'),
+    // Token limits (output)
+    outputTokensLimit: res.headers.get('anthropic-ratelimit-output-tokens-limit'),
+    outputTokensRemaining: res.headers.get('anthropic-ratelimit-output-tokens-remaining'),
+    outputTokensReset: res.headers.get('anthropic-ratelimit-output-tokens-reset'),
+    // Legacy/alternate headers
+    legacyLimit: res.headers.get('x-ratelimit-limit-requests'),
+    legacyRemaining: res.headers.get('x-ratelimit-remaining-requests'),
+    legacyReset: res.headers.get('x-ratelimit-reset-requests'),
+  };
+
+  // Parse request limits (prefer new headers, fallback to legacy)
+  const requestsLimit = parseInt(headers.requestsLimit || headers.legacyLimit) || null;
+  const requestsRemaining = parseInt(headers.requestsRemaining || headers.legacyRemaining);
+  const requestsReset = headers.requestsReset || headers.legacyReset;
+
+  // Parse token limits
+  const inputTokensLimit = parseInt(headers.inputTokensLimit) || null;
+  const inputTokensRemaining = parseInt(headers.inputTokensRemaining);
+  const outputTokensLimit = parseInt(headers.outputTokensLimit) || null;
+  const outputTokensRemaining = parseInt(headers.outputTokensRemaining);
+
+  // Calculate usage
+  const requestsUsage = (requestsLimit && !isNaN(requestsRemaining))
+    ? requestsLimit - requestsRemaining
+    : null;
+
+  // Detect tier based on request limits (RPM)
+  // Tier 1: 60 RPM, Tier 2: 1000 RPM, Tier 3: 2000 RPM, Tier 4: 4000 RPM
+  const detectedTier = detectAnthropicTier(requestsLimit);
+
+  // Parse reset time
+  let resetDate = null;
+  if (requestsReset) {
+    try {
+      resetDate = new Date(requestsReset).toISOString();
+    } catch (e) {
+      // Reset time parsing failed
+    }
+  }
 
   return {
     valid: true,
     provider: 'Anthropic',
-    usage: usage,
-    limit: limit,
+    usage: requestsUsage,
+    limit: requestsLimit,
     resetPeriod: 'per-minute',
-    resetInfo: rateLimitReset ? `Resets at ${rateLimitReset}` : 'Resets every minute',
-    message: limit 
-      ? `Key valid. ${remaining}/${limit} requests remaining this period.`
+    resetDate: resetDate,
+    resetInfo: requestsReset
+      ? `Resets at ${new Date(requestsReset).toLocaleTimeString()}`
+      : 'Resets every minute',
+    subscriptionTier: detectedTier,
+    message: requestsLimit
+      ? `Key valid. ${requestsRemaining}/${requestsLimit} requests remaining (${detectedTier}).`
       : 'Key valid. Rate limit info not available in response.',
+    dashboardUrl: 'https://console.anthropic.com/settings/limits',
+    // Extended data for detailed display
+    rateLimits: {
+      requests: {
+        limit: requestsLimit,
+        remaining: !isNaN(requestsRemaining) ? requestsRemaining : null,
+        reset: requestsReset
+      },
+      inputTokens: {
+        limit: inputTokensLimit,
+        remaining: !isNaN(inputTokensRemaining) ? inputTokensRemaining : null,
+        reset: headers.inputTokensReset
+      },
+      outputTokens: {
+        limit: outputTokensLimit,
+        remaining: !isNaN(outputTokensRemaining) ? outputTokensRemaining : null,
+        reset: headers.outputTokensReset
+      }
+    }
   };
 }
 
+// Detect Anthropic tier based on RPM limit
+function detectAnthropicTier(requestsPerMinute) {
+  if (!requestsPerMinute) return 'Unknown';
+  if (requestsPerMinute >= 4000) return 'Tier 4';
+  if (requestsPerMinute >= 2000) return 'Tier 3';
+  if (requestsPerMinute >= 1000) return 'Tier 2';
+  if (requestsPerMinute >= 60) return 'Tier 1';
+  return 'Free';
+}
+
 // Google Gemini
+// Enhanced with tier detection and known rate limits
 async function testGemini(apiKey) {
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1/models?key=${apiKey}`
@@ -175,16 +248,57 @@ async function testGemini(apiKey) {
     throw new Error(err.error?.message || 'Invalid API key');
   }
 
+  const data = await res.json();
+
+  // Check rate limit headers if available
+  const rateLimitLimit = res.headers.get('x-ratelimit-limit');
+  const rateLimitRemaining = res.headers.get('x-ratelimit-remaining');
+  const rateLimitReset = res.headers.get('x-ratelimit-reset');
+
+  // Count available models to help estimate tier
+  const modelCount = data.models?.length || 0;
+
+  // Gemini rate limits by tier (RPM for gemini-1.5-flash):
+  // Free: 15 RPM, Tier 1: 150-300 RPM, Tier 2: 1000+ RPM, Tier 3: 4000+ RPM
+  const limit = rateLimitLimit ? parseInt(rateLimitLimit) : null;
+  const detectedTier = detectGeminiTier(limit);
+
+  // Calculate next reset (daily at midnight Pacific)
+  const now = new Date();
+  const pacificMidnight = new Date(now.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+  pacificMidnight.setDate(pacificMidnight.getDate() + 1);
+  pacificMidnight.setHours(0, 0, 0, 0);
+
   return {
     valid: true,
     provider: 'Google Gemini',
     usage: null,
-    limit: null,
+    limit: limit,
     resetPeriod: 'per-minute',
-    resetInfo: 'Rate limits vary by model and tier',
-    message: 'Key valid. Usage tracking available in Google Cloud Console.',
+    resetDate: rateLimitReset || null,
+    resetInfo: 'Rate limits apply per minute. Daily quotas reset at midnight Pacific.',
+    subscriptionTier: detectedTier,
+    message: `Key valid. ${modelCount} models available. ${detectedTier} tier detected.`,
     dashboardUrl: 'https://console.cloud.google.com/apis/dashboard',
+    availableModels: data.models?.map(m => m.name).slice(0, 10) || [],
+    rateLimits: limit ? {
+      requests: {
+        limit: limit,
+        remaining: rateLimitRemaining ? parseInt(rateLimitRemaining) : null,
+        reset: rateLimitReset
+      }
+    } : null
   };
+}
+
+// Detect Gemini tier based on RPM limit
+function detectGeminiTier(requestsPerMinute) {
+  if (!requestsPerMinute) return 'Unknown';
+  if (requestsPerMinute >= 4000) return 'Tier 3';
+  if (requestsPerMinute >= 1000) return 'Tier 2';
+  if (requestsPerMinute >= 150) return 'Tier 1';
+  if (requestsPerMinute >= 15) return 'Free';
+  return 'Free';
 }
 
 // HuggingFace
@@ -213,6 +327,7 @@ async function testHuggingFace(apiKey) {
 }
 
 // Perplexity
+// Enhanced with comprehensive rate limit parsing
 async function testPerplexity(apiKey) {
   const res = await fetch('https://api.perplexity.ai/chat/completions', {
     method: 'POST',
@@ -231,19 +346,56 @@ async function testPerplexity(apiKey) {
     throw new Error('Invalid API key');
   }
 
-  // Check for rate limit headers
-  const rateLimitLimit = res.headers.get('x-ratelimit-limit-requests');
-  const rateLimitRemaining = res.headers.get('x-ratelimit-remaining-requests');
+  // Extract all rate limit headers
+  const headers = {
+    requestsLimit: res.headers.get('x-ratelimit-limit-requests'),
+    requestsRemaining: res.headers.get('x-ratelimit-remaining-requests'),
+    requestsReset: res.headers.get('x-ratelimit-reset-requests'),
+    tokensLimit: res.headers.get('x-ratelimit-limit-tokens'),
+    tokensRemaining: res.headers.get('x-ratelimit-remaining-tokens'),
+  };
+
+  const requestsLimit = headers.requestsLimit ? parseInt(headers.requestsLimit) : null;
+  const requestsRemaining = headers.requestsRemaining ? parseInt(headers.requestsRemaining) : null;
+  const tokensLimit = headers.tokensLimit ? parseInt(headers.tokensLimit) : null;
+
+  // Calculate usage
+  const requestsUsage = (requestsLimit && requestsRemaining !== null)
+    ? requestsLimit - requestsRemaining
+    : null;
+
+  // Detect tier based on limits
+  // Pro: ~$5/month included, Max: ~$50/month
+  const detectedTier = requestsLimit && requestsLimit > 100 ? 'Pro' : 'Free';
+
+  // Calculate next reset (monthly on billing date)
+  const now = new Date();
+  const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
 
   return {
     valid: true,
     provider: 'Perplexity',
-    usage: null,
-    limit: rateLimitLimit ? parseInt(rateLimitLimit) : null,
+    usage: requestsUsage,
+    limit: requestsLimit,
     resetPeriod: 'monthly',
-    resetInfo: 'Check dashboard for detailed usage',
-    message: 'Key valid. Detailed usage available in dashboard.',
+    resetDate: nextMonth.toISOString(),
+    resetInfo: 'Resets on your monthly billing date',
+    subscriptionTier: detectedTier,
+    message: requestsLimit
+      ? `Key valid. ${requestsRemaining}/${requestsLimit} requests remaining.`
+      : 'Key valid. Detailed usage available in dashboard.',
     dashboardUrl: 'https://www.perplexity.ai/settings/api',
+    rateLimits: {
+      requests: {
+        limit: requestsLimit,
+        remaining: requestsRemaining,
+        reset: headers.requestsReset
+      },
+      tokens: tokensLimit ? {
+        limit: tokensLimit,
+        remaining: headers.tokensRemaining ? parseInt(headers.tokensRemaining) : null
+      } : null
+    }
   };
 }
 
